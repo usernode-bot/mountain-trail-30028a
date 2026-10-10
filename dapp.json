@@ -50,6 +50,16 @@
       "name": "Location tab",
       "path": "/#location",
       "expectText": "Share with basecamp"
+    },
+    {
+      "name": "Location tab sends by WhatsApp or SMS",
+      "path": "/#location",
+      "expectSelector": "#wa-btn"
+    },
+    {
+      "name": "Location demo shows a waiting message",
+      "path": "/?demo=1#location",
+      "expectText": "Waiting for signal"
     }
   ]
 }
