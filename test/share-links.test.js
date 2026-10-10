@@ -83,3 +83,8 @@ test('queueWith keeps only the newest max entries and leaves the input alone', (
   assert.deepEqual(out.map((e) => e.text), ['6', '1', '2', '3', '4']);
   assert.deepEqual(q.map((e) => e.text), ['1', '2', '3', '4', '5']);
 });
+
+test('the demo contact sanitises both ways', () => {
+  assert.equal(waNumber('0800 0000 000 (demo)'), '628000000000');
+  assert.equal(smsNumber('0800 0000 000 (demo)'), '08000000000');
+});

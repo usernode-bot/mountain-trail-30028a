@@ -2,6 +2,8 @@
  * Send the location message through WhatsApp or SMS, and keep a waiting
  * queue for messages tapped with no signal. Pure string and array rules,
  * so they can be unit tested; app.js wires them to the Location tab.
+ * Nothing here sends anything; the other app does, after the hiker presses
+ * send there.
  */
 (function (root, factory) {
   var api = factory();
