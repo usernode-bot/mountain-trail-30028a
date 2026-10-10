@@ -171,6 +171,9 @@ Re-theme by changing the token values there, keeping every text pair at
 - The packing checklist (`public/packing.js`), the hiker's name and the
   basecamp contact are device-only, in `localStorage` under `mt:`
   (`mt:demo:` in the demo). They are never sent to the server.
+  The same goes for the share queue `mt:shareQueue` (`mt:demo:shareQueue`):
+  location messages tapped with no signal, at most 5, each sent only through
+  the WhatsApp or SMS app the hiker opens themselves.
 - The last location is kept on the phone in `localStorage` under `mt:` and
   is ALSO sent to the server on each "Update my location" tap (queued in
   `mt:queue` while offline, replayed like reports). The server stores it in

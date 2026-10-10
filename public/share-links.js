@@ -1,8 +1,9 @@
 /*
- * Deep links that hand the ready-made location message to WhatsApp or the
- * phone's messages app. Pure: contact and text in, link out, so the number
- * rules can be unit tested. Nothing here sends anything; the other app does,
- * after the hiker presses send there.
+ * Send the location message through WhatsApp or SMS, and keep a waiting
+ * queue for messages tapped with no signal. Pure string and array rules,
+ * so they can be unit tested; app.js wires them to the Location tab.
+ * Nothing here sends anything; the other app does, after the hiker presses
+ * send there.
  */
 (function (root, factory) {
   var api = factory();
@@ -11,36 +12,60 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  // Digits only; a leading 0 (local prefix) becomes the country code 62 so
-  // wa.me can route it. A number already typed with +62 or 62 is used as is.
-  function whatsappNumber(contact) {
+  // The digits a contact is worth: 8 to 15 of them, or it is a name or
+  // not a number.
+  function digitsOf(contact) {
     var digits = String(contact == null ? '' : contact).replace(/\D/g, '');
+    if (digits.length < 8 || digits.length > 15) return '';
+    return digits;
+  }
+
+  // wa.me needs the international form: a local 0812… becomes 62812….
+  function waNumber(contact) {
+    var digits = digitsOf(contact);
     if (!digits) return '';
     if (digits.charAt(0) === '0') return '62' + digits.slice(1);
     return digits;
   }
 
-  // Digits with one leading + kept: SMS dials the number as saved, so a
-  // local 08 prefix stays 08.
+  // SMS dials the number as the phone knows it: keep a leading +, keep a
+  // local 08… as typed.
   function smsNumber(contact) {
-    var s = String(contact == null ? '' : contact).trim();
-    var plus = s.charAt(0) === '+' ? '+' : '';
-    var digits = s.replace(/\D/g, '');
+    var raw = String(contact == null ? '' : contact).trim();
+    var digits = digitsOf(raw);
     if (!digits) return '';
-    return plus + digits;
+    return raw.charAt(0) === '+' ? '+' + digits : digits;
   }
 
-  function whatsappLink(contact, text) {
-    var n = whatsappNumber(contact);
-    if (!n) return null;
+  function whatsappUrl(text, contact) {
+    var n = waNumber(contact);
     return 'https://wa.me/' + n + '?text=' + encodeURIComponent(text);
   }
 
-  function smsLink(contact, text) {
+  // The "?&body=" form opens the body on both iOS and Android.
+  function smsUrl(text, contact) {
     var n = smsNumber(contact);
-    if (!n) return null;
-    return 'sms:' + n + '?body=' + encodeURIComponent(text);
+    return 'sms:' + n + '?&body=' + encodeURIComponent(text);
   }
 
-  return { whatsappNumber: whatsappNumber, smsNumber: smsNumber, whatsappLink: whatsappLink, smsLink: smsLink };
+  // Just the coordinates, ready to read out over radio.
+  function coordsLine(lat, lng) {
+    return lat.toFixed(5) + ', ' + lng.toFixed(5);
+  }
+
+  // Newest first, no duplicate of the newest text, cut to max.
+  function queueWith(queue, entry, max) {
+    var q = queue.slice();
+    if (!q.length || q[0].text !== entry.text) q.unshift(entry);
+    return q.slice(0, max);
+  }
+
+  return {
+    waNumber: waNumber,
+    smsNumber: smsNumber,
+    whatsappUrl: whatsappUrl,
+    smsUrl: smsUrl,
+    coordsLine: coordsLine,
+    queueWith: queueWith,
+  };
 });
