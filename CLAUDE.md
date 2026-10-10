@@ -97,29 +97,49 @@ tables you've marked private), etc.
 
 ## About Mountain Trail
 
-An offline trail guide and safety companion for hikers
-
-_(add a sentence or two more of product context here so Claude Code has a
-shared understanding of what this app is for)_
+An offline trail guide and safety companion for hikers, built around one
+mountain: Gede Pangrango by the Cibodas route. The guide (posts, water
+sources, camps, the trail line) ships with the app as static content in
+`public/trail-data.js`, so it works with no signal. Hikers report current
+trail conditions (Slippery, Landslide, No water, Heavy fog) with one tap and
+an optional photo, build a packing checklist from days and group size, and
+share their last location as a message for basecamp or family. Reports are
+shared through the server so the next hiker sees them; the checklist, last
+location, name and basecamp contact stay on the phone.
 
 ## Design
 
-This app's look. The first real version fills in the blanks; every later
-change follows it, and updates it when a request changes the look on purpose.
+This app's look. Every later change follows it, and updates it when a
+request changes the look on purpose.
 
-- **Palette:** _(name the accent, any second colour and the neutrals, e.g.
-  "accent: tomato red; second: basil green; neutrals: warm greys")_
-- **Signature element:** _(the one thing on screen drawn from this app's
-  subject, which no other app would have)_
-- **Type scale:** `text-title`, `text-heading`, `text-body`, `text-small`
-  _(change their sizes in `tailwind.config.js` if you must, not their number)_
-- **One fixed look:** _(only for an app drawn as its own scene, such as a
-  game: which look, and why. Otherwise delete this line.)_
+- **Palette:** cool lichen and stone grey neutrals with a hint of green
+  (not a warm cream), forest green as the action colour, and the trail's
+  own subject colours: amber for warnings (Slippery, No water, Heavy fog),
+  red for a blocked path (Landslide), map blue for water sources. Light
+  and dark values live in `styles/tailwind-input.css` (`--ground`,
+  `--accent`, `--warn`, `--danger`, `--water`, ...); `tailwind.config.js`
+  names them.
+- **Signature element:** the trail line. A dashed rail, drawn the way
+  trails are drawn on a map, runs from basecamp down the screen to the
+  summit. Each stop is a round node carrying its kind's icon (hut,
+  signpost, drop, tent, peak), and the node's ring takes the colour of the
+  stop's latest condition. The walk to the next stop sits on the line
+  between nodes, and the height profile at the top repeats the same stops
+  as coloured dots.
+- **Type scale:** `text-title` (28 px bold, the mountain's name),
+  `text-heading` (20 px semibold, tab headings), `text-body` (16 px),
+  `text-small` (14 px). Headings use the system's rounded face
+  (`font-display`, `ui-rounded`); body text the system sans.
+- **Icons:** one drawn line set, one stroke width. Basecamp (a hut), post
+  (a signpost), water (a drop), camp (a tent), summit (a peak with a
+  flag), and one per condition: wet waves, a shedding slope, a crossed-out
+  drop, stacked haze lines.
 
 The kit is in `styles/tailwind-input.css`: colour tokens with a light and
-a dark value (named in `tailwind.config.js`), and a few components
+a dark value (named in `tailwind.config.js`), and components
 (`btn-primary`, `btn-secondary`, `field`, `list` and `list-row`,
-`card`, `section-label`, `skeleton`, `state-empty`, `state-error`).
+`card`, `section-label`, `skeleton`, `state-empty`, `state-error`, plus
+the trail line, status strip, condition buttons and tab bar).
 Re-theme by changing the token values there, keeping every text pair at
 4.5:1 or more in both looks.
 
@@ -128,17 +148,35 @@ Re-theme by changing the token values there, keeping every text pair at
   `text-on-accent`, ...): never a raw hex value or a stock palette class.
 - Tap targets are at least 44 px; the buttons and fields already are.
 - A field's label says what it is; its placeholder, if any, is an example
-  that says so ("e.g. 5.0"), never a bare value that could pass for one
-  already entered.
+  that says so ("e.g. 0812 0000 0000"), never a bare value that could pass
+  for one already entered.
 - Every screen that loads data has honest loading, empty and error states.
   Never show the empty state while loading or after a failure; an error says
-  what failed, what still works, and offers Retry.
+  what failed, what still works, and offers Retry. The guide itself never
+  loads: it is part of the app.
 - Seed obviously fake staging demo data so the populated screen can be seen
   ("Staging mock data" in the platform conventions).
 - No cards in cards, no uppercase eyebrows, no emoji as icons.
 
 ## App-specific conventions
 
-_(optional — e.g. "all currency values stored as integer cents, not
-floats"; "the `posts` table is append-only"; "avoid adding new
-dependencies"; etc.)_
+- The guide data (mountain, stops, conditions) lives in
+  `public/trail-data.js` and is shared with `server.js`, which validates
+  every report's `stop_id` and `condition` against it. The stop table in
+  this file's history is the source of truth; heights and distances are
+  approximate, and a line on the Trail tab says so.
+- The packing checklist (`public/packing.js`), the last location, the
+  hiker's name and the basecamp contact are device-only, in `localStorage`
+  under `mt:` (`mt:demo:` in the demo). They are never sent to the server.
+- Reports show for 24 hours. Older ones stay stored but are never
+  displayed anywhere.
+- Two flags hide a report for everyone; the author's own reports are never
+  hidden by flags. A report flagged by you disappears for you at once.
+- The app ships no basecamp phone number: a wrong number in a safety app
+  is worse than none. Every share message carries Indonesia's emergency
+  number, 112.
+- Offline: a service worker (`public/sw.js`) caches the shell after one
+  online visit; it never caches `/api/`. Reports made offline queue in
+  `mt:queue` and replay by `client_id`, so replays are idempotent.
+- Geolocation is read only on the tap of "Update my location", never in
+  the background.

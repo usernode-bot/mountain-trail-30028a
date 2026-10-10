@@ -10,5 +10,46 @@
   },
   "admins": [
     "dendiharyawan"
+  ],
+  "permissions": [
+    {
+      "capability": "geolocation",
+      "reason": "Reads your position to share it with basecamp and pick the stop you report from"
+    }
+  ],
+  "tests": [
+    {
+      "name": "Trail guide renders",
+      "path": "/",
+      "expectSelector": "#trail-line"
+    },
+    {
+      "id": "trail.demo",
+      "name": "Populated demo",
+      "path": "/?demo=1",
+      "expectText": "Staging demo",
+      "visual": true,
+      "impact": [
+        "public/**",
+        "server.js",
+        "styles/**",
+        "tailwind.config.js"
+      ]
+    },
+    {
+      "name": "Report tab",
+      "path": "/#report",
+      "expectSelector": "#condition-buttons"
+    },
+    {
+      "name": "Packing tab",
+      "path": "/#packing",
+      "expectText": "Shared by the group"
+    },
+    {
+      "name": "Location tab",
+      "path": "/#location",
+      "expectText": "Share with basecamp"
+    }
   ]
 }
