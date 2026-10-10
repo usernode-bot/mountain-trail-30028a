@@ -2,8 +2,10 @@
  * Mountain Trail's whole UI. Hash routing for the four tabs; the guide and
  * packing rules come from trail-data.js and packing.js; reports go through
  * the server; the checklist, last location, name and contact live only in
- * localStorage. Every class name is written as a whole literal so the
- * precompiled Tailwind build can see it.
+ * localStorage. A location taken with an account is also sent to the server
+ * (queued offline, replayed on reconnect) but is shown to nobody. Every
+ * class name is written as a whole literal so the precompiled Tailwind build
+ * can see it.
  */
 (function () {
   'use strict';
@@ -588,13 +590,18 @@
     try {
       for (var i = 0; i < q.length; i++) {
         var stored = q[i];
-        var entry = null;
-        pending.forEach(function (p) { if (p.clientId === stored.clientId) entry = p; });
-        if (!entry) {
-          entry = Object.assign({ pending: true, waiting: true, mine: true, photoUrl: null }, stored);
-          pending.push(entry);
+        var sent;
+        if (stored.kind === 'location') {
+          sent = await postLocation(stored);
+        } else {
+          var entry = null;
+          pending.forEach(function (p) { if (p.clientId === stored.clientId) entry = p; });
+          if (!entry) {
+            entry = Object.assign({ pending: true, waiting: true, mine: true, photoUrl: null }, stored);
+            pending.push(entry);
+          }
+          sent = await postReport(entry);
         }
-        var sent = await postReport(entry);
         if (!sent) break;
       }
     } finally {
@@ -1057,8 +1064,91 @@
     } else {
       body.innerHTML = '<p class="text-body text-muted">No location yet. Tap Update my location to take one.</p>';
     }
+    renderLocSync();
     $('coords-copy').hidden = !loc;
     renderMsgPreview();
+  }
+  // The one status line under the coordinates: has the latest location
+  // reached Mountain Trail yet? Same style as the "Guide saved for offline
+  // use" line on the Trail tab.
+  var locSending = null;   // clientId of the location request in flight
+  function renderLocSync() {
+    var el = $('loc-sync');
+    if (!el) return;
+    var loc = lsGet('location', null);
+    var html = null;
+    if (loc && loc.clientId) {
+      if (locSending === loc.clientId) {
+        html = iconSvg('clock', 'h-4 w-4') + ' Sending your location…';
+      } else if (loc.sentAt) {
+        html = '<span class="text-accent">' + iconSvg('check', 'h-4 w-4') + '</span> Sent to Mountain Trail at ' +
+          fmtClock(loc.sentAt) + '. Not shown to other hikers.';
+      } else if (loc.sendFailed) {
+        html = iconSvg('warning', 'h-4 w-4') + ' This location couldn\'t be sent. Tap Update my location to try again.';
+      } else {
+        var queued = false;
+        queueAll().forEach(function (e) { if (e.kind === 'location' && e.clientId === loc.clientId) queued = true; });
+        if (queued) {
+          html = iconSvg('clock', 'h-4 w-4') + ' Not sent yet. Kept on this phone, it sends when the signal is back.';
+        }
+      }
+    }
+    if (html) {
+      el.hidden = false;
+      el.innerHTML = html;
+    } else {
+      el.hidden = true;
+      el.textContent = '';
+    }
+  }
+  // Send the latest location to the server, queued in the offline queue
+  // first so closing the app mid-request cannot lose it. At most one
+  // location ever waits: a newer one replaces an older queued entry.
+  function sendLocation(loc) {
+    var entry = { kind: 'location', clientId: loc.clientId, lat: loc.lat, lng: loc.lng, accuracy: loc.accuracy, at: loc.at };
+    var q = queueAll().filter(function (e) { return e.kind !== 'location'; });
+    q.push(entry);
+    queueSave(q);
+    return postLocation(entry);
+  }
+  // Returns true when the entry is settled (sent, or refused for good —
+  // it was removed from the queue), false when it should stay queued.
+  async function postLocation(entry) {
+    locSending = entry.clientId;
+    renderLocSync();
+    var res = null;
+    try {
+      res = await api('/api/locations', {
+        method: 'POST',
+        body: { clientId: entry.clientId, lat: entry.lat, lng: entry.lng, accuracy: entry.accuracy, at: entry.at },
+      });
+    } catch (e) {}
+    var settled = false;
+    if (res && res.ok && res.data && res.data.location) {
+      queueRemove(entry.clientId);
+      var loc = lsGet('location', null);
+      if (loc && loc.clientId === entry.clientId) {
+        loc.sentAt = res.data.location.receivedAt;
+        delete loc.sendFailed;
+        lsSet('location', loc);
+      }
+      settled = true;
+    } else if (res && res.status >= 400 && res.status < 500 && res.status !== 401) {
+      // Mountain Trail refused it (bad coordinates, an expired client_id);
+      // drop it rather than retry forever, matching reports.
+      queueRemove(entry.clientId);
+      var loc2 = lsGet('location', null);
+      if (loc2 && loc2.clientId === entry.clientId) {
+        loc2.sendFailed = true;
+        lsSet('location', loc2);
+      }
+      settled = true;
+    }
+    // Anything else (no connection, 401, 500): the entry stays queued and a
+    // later replay tries again.
+    locSending = null;
+    renderLocSync();
+    return settled;
   }
   function fmtWhen(iso) {
     var d = new Date(iso);
@@ -1234,7 +1324,17 @@
       fixInFlight = true;
       navigator.geolocation.getCurrentPosition(function (pos) {
         fixInFlight = false;
-        lsSet('location', { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy, at: nowISO() });
+        var loc = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy, at: nowISO() };
+        // With an account the location is also sent to Mountain Trail
+        // (queued while offline); guests keep it on the phone only, as
+        // before, and see no status line.
+        if (ME.user) {
+          loc.clientId = uuid();
+          lsSet('location', loc);
+          sendLocation(loc);
+        } else {
+          lsSet('location', loc);
+        }
         if (onOk) onOk(pos);
       }, function () {
         fixInFlight = false;
@@ -1364,7 +1464,14 @@
     if (lsGet('seeded', false)) return;
     lsSet('packing', { days: 2, people: 4, packed: ['permit', 'tent', 'stove', 'gas', 'first-aid', 'rain-jacket', 'headlamp', 'water', 'meals'] });
     var here = STOP_BY_ID['air-panas'];
-    lsSet('location', { lat: here.lat + 0.0011, lng: here.lng, accuracy: 12, at: new Date(nowDate().getTime() - 2 * 60000).toISOString() });
+    lsSet('location', {
+      lat: here.lat + 0.0011, lng: here.lng, accuracy: 12,
+      at: new Date(nowDate().getTime() - 2 * 60000).toISOString(),
+      // Seeded as already sent so the status line can be seen in the demo;
+      // it was never queued, so nothing real is sent for it.
+      clientId: 'demo-location',
+      sentAt: new Date(nowDate().getTime() - 2 * 60000).toISOString(),
+    });
     lsSet('name', 'Demo hiker');
     lsSet('contact', '0800 0000 000 (demo)');
     lsSet('seeded', true);

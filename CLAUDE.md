@@ -104,8 +104,11 @@ sources, camps, the trail line) ships with the app as static content in
 trail conditions (Slippery, Landslide, No water, Heavy fog) with one tap and
 an optional photo, build a packing checklist from days and group size, and
 share their last location as a message for basecamp or family. Reports are
-shared through the server so the next hiker sees them; the checklist, last
-location, name and basecamp contact stay on the phone.
+shared through the server so the next hiker sees them. When a signed-in
+hiker updates their location, a copy is sent to the server (queued offline
+and replayed on reconnect) into a private, append-only table that nothing in
+the app reads back; the phone keeps its own copy, and the checklist, name
+and basecamp contact stay on the phone.
 
 ## Design
 
@@ -165,12 +168,18 @@ Re-theme by changing the token values there, keeping every text pair at
   every report's `stop_id` and `condition` against it. The stop table in
   this file's history is the source of truth; heights and distances are
   approximate, and a line on the Trail tab says so.
-- The packing checklist (`public/packing.js`), the last location, the
-  hiker's name and the basecamp contact are device-only, in `localStorage`
-  under `mt:` (`mt:demo:` in the demo). They are never sent to the server.
+- The packing checklist (`public/packing.js`), the hiker's name and the
+  basecamp contact are device-only, in `localStorage` under `mt:`
+  (`mt:demo:` in the demo). They are never sent to the server.
   The same goes for the share queue `mt:shareQueue` (`mt:demo:shareQueue`):
   location messages tapped with no signal, at most 5, each sent only through
   the WhatsApp or SMS app the hiker opens themselves.
+- The last location is kept on the phone in `localStorage` under `mt:` and
+  is ALSO sent to the server on each "Update my location" tap (queued in
+  `mt:queue` while offline, replayed like reports). The server stores it in
+  `hiker_locations`, an append-only table marked `staging:private`: no GET
+  route reads it back and no hiker sees another's location. Guests and
+  locations taken before this change are not sent.
 - Reports show for 24 hours. Older ones stay stored but are never
   displayed anywhere.
 - Two flags hide a report for everyone; the author's own reports are never
