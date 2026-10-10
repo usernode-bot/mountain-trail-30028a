@@ -178,5 +178,6 @@ Re-theme by changing the token values there, keeping every text pair at
 - Offline: a service worker (`public/sw.js`) caches the shell after one
   online visit; it never caches `/api/`. Reports made offline queue in
   `mt:queue` and replay by `client_id`, so replays are idempotent.
-- Geolocation is read only on the tap of "Update my location", never in
-  the background.
+- Geolocation is first asked for only on the tap of "Update my location". Once permission is granted, the
+  app re-reads the position about every 20 minutes while it is open (never prompting on its own), and keeps
+  the last fix and its timestamp when a read fails.
