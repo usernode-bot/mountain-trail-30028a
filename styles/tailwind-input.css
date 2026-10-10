@@ -13,46 +13,45 @@
 @tailwind utilities;
 
 /* ── Colour tokens ────────────────────────────────────────────────────────
- * This app's palette, defined once. Each value is "R G B"; tailwind.config.js
- * names them (bg-ground, bg-surface, text-fg, text-muted, border-line,
- * bg-accent with text-on-accent, ...). :root is the light look, and .dark,
- * which the theme script in public/index.html sets on <html>, the dark one.
- *
- * Re-theme the app HERE: change the values, keep the names. The defaults
- * (warm greys, one teal accent) are a quiet starting point, not a look.
- * Keep every text pair at 4.5:1 or more in both looks: fg and muted on
- * ground, surface and raised; accent and danger on ground and surface;
- * on-accent on accent; on-danger on danger.
- *
- * Adopting the native UI kit later? Point its --un-accent and
- * --un-accent-contrast at the accent and on-accent tokens.
+ * Mountain Trail's palette. Neutrals are a cool lichen and stone grey with
+ * a hint of green. The action colour is forest green. The trail's own
+ * colours, the ones a park sign or trail map uses: amber for warnings
+ * (slippery, no water, heavy fog), red for a blocked path (landslide) and
+ * map blue for water sources. :root is the light look, .dark the dark one.
+ * Every text pair stays at 4.5:1 or more in both looks.
  */
 @layer base {
   :root {
-    --ground: 250 250 249;    /* the page */
+    --ground: 243 244 240;    /* the page */
     --surface: 255 255 255;   /* lists, cards, fields */
-    --raised: 245 245 244;    /* hovers, badges */
-    --fg: 28 25 23;           /* text */
-    --muted: 87 83 78;        /* secondary text */
-    --line: 231 229 228;      /* borders, dividers, skeletons */
-    --accent: 15 118 110;     /* the one accent */
+    --raised: 232 235 229;    /* hovers, badges, the demo line */
+    --fg: 26 32 28;           /* text */
+    --muted: 82 91 85;        /* secondary text */
+    --line: 214 219 212;      /* borders, dividers, skeletons */
+    --accent: 30 96 62;       /* the one accent: forest green */
     --on-accent: 255 255 255; /* text on the accent */
-    --danger: 185 28 28;
+    --danger: 180 35 24;      /* a blocked path: landslide */
     --on-danger: 255 255 255;
-    --focus: 13 148 136;      /* the keyboard focus ring */
+    --focus: 30 96 62;        /* the keyboard focus ring */
+    --warn: 156 90 0;         /* trail warning: slippery, no water, fog */
+    --on-warn: 255 255 255;
+    --water: 22 98 160;       /* map blue for water sources */
   }
   .dark {
-    --ground: 12 10 9;
-    --surface: 28 25 23;
-    --raised: 41 37 36;
-    --fg: 245 245 244;
-    --muted: 168 162 158;
-    --line: 68 64 60;
-    --accent: 45 212 191;
-    --on-accent: 4 47 46;
-    --danger: 248 113 113;
-    --on-danger: 69 10 10;
-    --focus: 94 234 212;
+    --ground: 16 20 17;
+    --surface: 25 30 26;
+    --raised: 36 43 38;
+    --fg: 233 238 232;
+    --muted: 160 170 162;
+    --line: 52 61 55;
+    --accent: 112 196 146;
+    --on-accent: 8 36 20;
+    --danger: 248 120 108;
+    --on-danger: 60 8 4;
+    --focus: 140 214 168;
+    --warn: 240 178 64;
+    --on-warn: 40 24 0;
+    --water: 120 182 236;
   }
   /* el.hidden = true hides an element even when a class gives it a display
      (flex, the components below). */
@@ -62,14 +61,14 @@
 }
 
 /* ── Components ───────────────────────────────────────────────────────────
- * A small starting kit on the tokens. Use these rather than restyling the
- * same thing by hand, add to them sparingly, and change a component here
- * rather than one copy of it. Type: text-title, text-heading, text-body and
- * text-small (tailwind.config.js), nothing in between.
+ * A small kit on the tokens: the design kit's buttons, fields, lists,
+ * cards and states, plus Mountain Trail's own — the trail line, the status
+ * strip, the condition buttons and the bottom tab bar. Type: text-title,
+ * text-heading, text-body and text-small, nothing in between.
  */
 @layer components {
-  /* Buttons: one primary per screen, the rest secondary. At least 44 px
-     each way, so they are easy to tap. */
+  /* Buttons: one primary per screen (Share with basecamp), the rest
+     secondary. At least 44 px each way, so they are easy to tap. */
   .btn-primary,
   .btn-secondary {
     @apply inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-lg px-4 text-body font-medium
@@ -85,7 +84,7 @@
 
   /* Text inputs, selects and textareas: <input class="field">, 44 px tall.
      The placeholder is a faint hint (muted at 60%), so an example such as
-     "5.0" never reads as a value somebody already typed in. */
+     "e.g. 0812 0000 0000" never reads as a value somebody typed in. */
   .field {
     @apply block min-h-11 w-full rounded-lg border border-line bg-surface px-3 py-2 text-body text-fg
       placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-focus;
@@ -100,8 +99,8 @@
     @apply flex min-h-11 items-center gap-3 px-4 py-3;
   }
 
-  /* A card: one self-contained thing, usually something you tap. Most
-     screens need none. Never put a card inside a card or a .list. */
+  /* A card: one self-contained thing, usually something you tap. Never put
+     a card inside a card or a .list. */
   .card {
     @apply rounded-xl border border-line bg-surface p-4;
   }
@@ -124,5 +123,156 @@
   .state-empty,
   .state-error {
     @apply flex flex-col items-center gap-2 px-4 py-8 text-center;
+  }
+
+  /* The staging demo line, across the top of every tab. */
+  .demo-line {
+    @apply bg-raised px-4 py-2 text-small text-muted;
+  }
+
+  /* The trail status strip: the worst report of the last 24 hours. Tones
+     follow the condition: warn for the amber ones, danger for landslide,
+     clear (plain) when there is nothing, skeleton bars while loading. */
+  .status-strip {
+    @apply flex min-h-11 items-start gap-3 rounded-xl border border-line bg-surface p-3;
+  }
+  .status-strip-icon {
+    @apply mt-0.5 h-6 w-6 flex-none;
+    color: rgb(var(--muted));
+  }
+  .status-strip-warn {
+    border-color: rgb(var(--warn) / 0.35);
+    background: rgb(var(--warn) / 0.07);
+  }
+  .status-strip-warn .status-strip-icon { color: rgb(var(--warn)); }
+  .status-strip-danger {
+    border-color: rgb(var(--danger) / 0.35);
+    background: rgb(var(--danger) / 0.07);
+  }
+  .status-strip-danger .status-strip-icon { color: rgb(var(--danger)); }
+  .status-strip-skeleton {
+    @apply pointer-events-none;
+  }
+
+  /* The trail line, the app's signature: a dashed rail the way trails are
+     drawn on a map, with a round node per stop carrying its kind's icon,
+     and the node's ring in the colour of the stop's latest condition. */
+  .trail-line {
+    @apply relative m-0 list-none p-0;
+  }
+  .trail-line::before {
+    content: "";
+    position: absolute;
+    left: 21px;
+    top: 24px;
+    bottom: 40px;
+    border-left: 2px dashed rgb(var(--muted) / 0.45);
+  }
+  .stop-row {
+    @apply relative flex gap-3 py-1.5;
+  }
+  .stop-node {
+    @apply relative z-10 flex h-11 w-11 flex-none items-center justify-center rounded-full border-2 bg-surface;
+    border-color: rgb(var(--line));
+  }
+  .stop-node-warn { border-color: rgb(var(--warn)); }
+  .stop-node-danger { border-color: rgb(var(--danger)); }
+  .stop-body { @apply min-w-0 flex-1 pt-0.5; }
+  .fac { @apply mt-1 flex gap-3 text-small; }
+  .fac > span { @apply inline-flex items-center gap-1; }
+  .fac-water { color: rgb(var(--water)); }
+  /* The walk to the next stop sits on the dashed rail between the nodes:
+     its padding plus the stop rows' 6 px keeps it about 12 px clear of
+     both, and the 56 px indent puts it past the node with the stop text. */
+  .leg-line { @apply py-1.5 pl-14 text-small text-muted; }
+
+  /* A stop's condition line, with the dot in the condition's colour. */
+  .cond-line {
+    @apply mt-1 flex items-center gap-1.5 text-small font-medium;
+  }
+  .cond-line i {
+    @apply h-2 w-2 flex-none rounded-full;
+    background: currentColor;
+  }
+  .cond-line-warn { color: rgb(var(--warn)); }
+  .cond-line-danger { color: rgb(var(--danger)); }
+  .cond-line-none {
+    @apply font-normal;
+    color: rgb(var(--muted));
+  }
+
+  /* The height profile, an SVG plot drawn from the same stop data. */
+  .profile-line {
+    fill: none;
+    stroke: rgb(var(--muted) / 0.6);
+    stroke-width: 2;
+    stroke-linejoin: round;
+  }
+  .profile-base {
+    fill: rgb(var(--surface));
+    stroke: rgb(var(--muted));
+    stroke-width: 1.5;
+  }
+  .profile-warn { fill: rgb(var(--warn)); }
+  .profile-danger { fill: rgb(var(--danger)); }
+
+  /* The Report tab's four large buttons. One tap sends; no form first. */
+  .condition-button {
+    @apply flex flex-col items-start gap-1 rounded-xl border border-line bg-surface p-3.5 text-left
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus;
+    min-height: 104px;
+  }
+  .condition-button-icon {
+    @apply mb-1 h-7 w-7;
+    color: rgb(var(--warn));
+  }
+  .condition-button-danger .condition-button-icon { color: rgb(var(--danger)); }
+  .condition-button-sent {
+    border-width: 2px;
+    border-color: rgb(var(--warn));
+    background: rgb(var(--warn) / 0.08);
+  }
+  .sent-check { color: rgb(var(--warn)); }
+
+  /* A report row's icon, in a soft round tint of the condition's colour. */
+  .report-icon {
+    @apply flex h-9 w-9 flex-none items-center justify-center rounded-full;
+  }
+  .report-icon-warn {
+    background: rgb(var(--warn) / 0.12);
+    color: rgb(var(--warn));
+  }
+  .report-icon-danger {
+    background: rgb(var(--danger) / 0.1);
+    color: rgb(var(--danger));
+  }
+  .report-thumb {
+    @apply flex h-14 w-14 flex-none items-center justify-center overflow-hidden rounded-lg bg-raised text-muted;
+  }
+
+  /* The bottom tab bar, fixed above the home indicator. The bar's
+     background runs the full width; its items stay within the content
+     column's width, centred, so desktop tabs sit by the content. */
+  .tab-bar {
+    @apply fixed inset-x-0 bottom-0 z-40 flex border-t border-line bg-surface;
+    padding: 4px 4px calc(12px + var(--un-safe-inset-bottom, env(safe-area-inset-bottom, 0px)));
+  }
+  .tab-bar-items {
+    @apply mx-auto flex w-full max-w-md px-4;
+  }
+  .tab-item {
+    @apply flex flex-1 flex-col items-center justify-center gap-0.5 text-small text-muted
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus;
+    min-height: 52px;
+  }
+  .tab-item-on {
+    @apply font-medium;
+    color: rgb(var(--accent));
+  }
+
+  /* The packing steppers' minus and plus buttons. */
+  .stepper-btn {
+    @apply flex h-11 w-11 flex-none items-center justify-center rounded-lg border border-line bg-surface text-body font-medium
+      text-fg hover:bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus;
   }
 }

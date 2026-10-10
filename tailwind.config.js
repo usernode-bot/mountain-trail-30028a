@@ -52,16 +52,25 @@ module.exports = {
         line: token('line'), // borders, dividers, skeletons
         accent: token('accent'), // the one accent: the primary action
         'on-accent': token('on-accent'), // text on the accent
-        danger: token('danger'),
-        'on-danger': token('on-danger'),
+        warn: token('warn'), // trail warning: slippery, no water, heavy fog
+        'on-warn': token('on-warn'), // text on the warning colour
+        danger: token('danger'), // a blocked path: landslide
+        'on-danger': token('on-danger'), // text on the danger colour
+        water: token('water'), // map blue for water sources
         focus: token('focus'), // the keyboard focus ring
+      },
+      // Park-signage headings in the system's rounded face where present;
+      // body text in the plain system sans.
+      fontFamily: {
+        display: ['ui-rounded', 'system-ui', 'sans-serif'],
+        sans: ['system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
       },
       // The type scale: four sizes, and nothing in between.
       fontSize: {
         small: ['0.875rem', { lineHeight: '1.25rem' }],
         body: ['1rem', { lineHeight: '1.5rem' }],
         heading: ['1.25rem', { lineHeight: '1.75rem', fontWeight: '600' }],
-        title: ['1.75rem', { lineHeight: '2.25rem', fontWeight: '700' }],
+        title: ['1.75rem', { lineHeight: '2.125rem', fontWeight: '700' }],
       },
     },
   },

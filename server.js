@@ -35,7 +35,7 @@ const GUEST_PUBLIC_KEY = (process.env.USERNODE_GUEST_JWT_PUBLIC_KEY || '')
 // Paths that stay open without authentication. Add a path here (and add it
 // with `app.get`/`app.post` below) if you deliberately want it public.
 // Everything else requires a valid platform-issued JWT.
-const PUBLIC_API_PATHS = new Set(['/health']);
+const PUBLIC_API_PATHS = new Set(['/health', '/api/me', '/api/reports']);
 
 app.use(express.json());
 
@@ -135,7 +135,7 @@ app.use((req, res, next) => {
   // `/api/*` included, so read routes must not assume req.user (use
   // `req.user ? req.user.id : null`). Every write needs an account.
   if (req.method !== 'GET' || req.path.startsWith('/api/')) {
-    if (PUBLIC_API_PATHS.has(req.path)) return next();
+    if (PUBLIC_API_PATHS.has(req.path) && req.method === 'GET') return next();
     if (!req.user && req.guest) {
       if (req.method === 'GET' || req.method === 'HEAD') return next();
       return res.status(401).json({ error: 'account_required' });
@@ -146,6 +146,238 @@ app.use((req, res, next) => {
 });
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+
+// ── Mountain Trail ─────────────────────────────────────────────────────────
+// The guide ships with the app (public/trail-data.js); the server requires
+// the same file so a report can only name a real stop and a real condition.
+const trailData = require('./public/trail-data.js');
+const STOP_IDS = new Set(trailData.STOPS.map((s) => s.id));
+const CONDITION_IDS = new Set(trailData.CONDITIONS.map((c) => c.id));
+
+// Both tables are public (staging copies their rows): they carry Homeroom
+// usernames, which are public, plus trail notes and photo URLs. No personal
+// data.
+async function migrate() {
+  await pool.query(`CREATE TABLE IF NOT EXISTS trail_reports (
+    id SERIAL PRIMARY KEY,
+    client_id TEXT UNIQUE NOT NULL,
+    user_id TEXT NOT NULL,
+    username TEXT NOT NULL,
+    stop_id TEXT NOT NULL,
+    condition TEXT NOT NULL CHECK (condition IN ('slippery','landslide','no-water','heavy-fog')),
+    note TEXT CHECK (char_length(note) <= 200),
+    photo_url TEXT,
+    photo_id TEXT,
+    created_at TIMESTAMPTZ NOT NULL
+  )`);
+  await pool.query(
+    'CREATE INDEX IF NOT EXISTS trail_reports_created_at_idx ON trail_reports (created_at DESC)'
+  );
+  await pool.query(`CREATE TABLE IF NOT EXISTS report_flags (
+    report_id INT REFERENCES trail_reports(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (report_id, user_id)
+  )`);
+}
+
+function rowToReport(r) {
+  return {
+    id: r.id,
+    clientId: r.client_id,
+    stopId: r.stop_id,
+    condition: r.condition,
+    note: r.note || '',
+    photoUrl: r.photo_url || null,
+    username: r.username,
+    mine: false,
+    createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at,
+  };
+}
+
+// The staging demo: eight made-up reports across five stops, merged into
+// GET /api/reports and never stored. Production never runs this branch, and
+// the plain route never returns demo rows.
+const DEMO_PHOTO_SVG =
+  'data:image/svg+xml;utf8,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240"><rect width="320" height="240" fill="#8a8f86"/><path d="M0 190 L110 90 L170 150 L210 120 L320 200 L320 240 L0 240 Z" fill="#5c6158"/><circle cx="250" cy="60" r="22" fill="#e8e6de"/><text x="16" y="30" font-family="system-ui" font-size="16" fill="#ffffff">Staging demo photo</text></svg>'
+  );
+const DEMO_REPORTS = [
+  { id: -1, username: 'demo-hiker-sari', stopId: 'puncak-gede', condition: 'heavy-fog', minsAgo: 25, note: "Can't see past the crater rim. Wait at the shelter below." },
+  { id: -2, username: 'demo-hiker-dewi', stopId: 'air-panas', condition: 'slippery', minsAgo: 40, note: 'The rope is fine, the rocks are wet.' },
+  { id: -3, username: 'demo-hiker-raka', stopId: 'tanjakan-setan', condition: 'landslide', minsAgo: 60, note: 'Part of the path is buried. Pass on the left by the ropes.', photoUrl: DEMO_PHOTO_SVG },
+  { id: -4, username: 'demo-hiker-bima', stopId: 'kandang-badak', condition: 'no-water', minsAgo: 120, note: 'The spring is only dripping. Fill up at Kandang Batu.' },
+  { id: -5, username: null, stopId: 'rawa-gayonggong', condition: 'slippery', minsAgo: 180, note: 'Boardwalk planks are mossy.' },
+  { id: -6, username: 'demo-hiker-nina', stopId: 'kandang-badak', condition: 'heavy-fog', minsAgo: 300, note: '' },
+  { id: -7, username: 'demo-hiker-oki', stopId: 'air-panas', condition: 'slippery', minsAgo: 540, note: '' },
+];
+
+app.get('/api/me', (req, res) => {
+  res.json({
+    user: req.user ? { id: req.user.id, username: req.user.username } : null,
+    guest: !!req.guest,
+    demo: IS_STAGING && req.query.demo === '1',
+  });
+});
+
+app.get('/api/reports', async (req, res) => {
+  const viewerId = req.user ? req.user.id : null;
+  const since = new Date(req.now.getTime() - 24 * 3600 * 1000);
+  let rows;
+  try {
+    const q = await pool.query(
+      `SELECT r.id, r.client_id, r.stop_id, r.condition, r.note, r.photo_url, r.user_id, r.username, r.created_at
+         FROM trail_reports r
+        WHERE r.created_at > $2
+          AND NOT EXISTS (SELECT 1 FROM report_flags f WHERE f.report_id = r.id AND f.user_id = $1)
+          AND (r.user_id = $1 OR (SELECT count(*) FROM report_flags f WHERE f.report_id = r.id) < 2)
+        ORDER BY r.created_at DESC
+        LIMIT 100`,
+      [viewerId, since]
+    );
+    rows = q.rows;
+  } catch (err) {
+    console.warn('reports query failed: ' + err.message);
+    return res.status(500).json({ error: 'Could not load reports' });
+  }
+  const reports = rows.map((r) => {
+    const rep = rowToReport(r);
+    rep.mine = !!viewerId && r.user_id === viewerId;
+    return rep;
+  });
+  if (IS_STAGING && req.query.demo === '1') {
+    const viewerName = req.user ? req.user.username : 'you';
+    const demoRows = DEMO_REPORTS.map((d) => ({
+      id: d.id,
+      clientId: null,
+      stopId: d.stopId,
+      condition: d.condition,
+      note: d.note || '',
+      photoUrl: d.photoUrl || null,
+      username: d.username || viewerName,
+      mine: d.username === null,
+      createdAt: new Date(req.now.getTime() - d.minsAgo * 60000).toISOString(),
+    }));
+    reports.push(...demoRows);
+    reports.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }
+  res.json({ now: req.now.toISOString(), reports });
+});
+
+app.post('/api/reports', async (req, res) => {
+  const b = req.body || {};
+  const clientId = typeof b.clientId === 'string' && b.clientId.length > 0 && b.clientId.length <= 64 ? b.clientId : null;
+  const note = typeof b.note === 'string' ? b.note.trim().slice(0, 200) : null;
+  if (!clientId || !STOP_IDS.has(b.stopId) || !CONDITION_IDS.has(b.condition)) {
+    return res.status(400).json({ error: 'Unknown stop or condition' });
+  }
+  try {
+    await pool.query(
+      `INSERT INTO trail_reports (client_id, user_id, username, stop_id, condition, note, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (client_id) DO NOTHING`,
+      [clientId, req.user.id, req.user.username, b.stopId, b.condition, note, req.now]
+    );
+    const q = await pool.query(
+      `SELECT id, client_id, stop_id, condition, note, photo_url, username, created_at
+         FROM trail_reports WHERE client_id = $1`,
+      [clientId]
+    );
+    const rep = rowToReport(q.rows[0]);
+    rep.mine = true;
+    res.status(201).json({ report: rep });
+  } catch (err) {
+    console.warn('report insert failed: ' + err.message);
+    res.status(500).json({ error: 'Could not save the report' });
+  }
+});
+
+async function ownReportOr404(req, res) {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.sendStatus(404);
+    return null;
+  }
+  const q = await pool.query('SELECT id, user_id, client_id, stop_id, condition, note, photo_url, photo_id, username, created_at FROM trail_reports WHERE id = $1', [id]);
+  const row = q.rows[0];
+  if (!row || row.user_id !== req.user.id) {
+    res.sendStatus(404);
+    return null;
+  }
+  return row;
+}
+
+app.patch('/api/reports/:id', async (req, res) => {
+  const row = await ownReportOr404(req, res);
+  if (!row) return;
+  if (req.now.getTime() - new Date(row.created_at).getTime() > 24 * 3600 * 1000) {
+    return res.status(403).json({ error: 'Reports can be edited for 24 hours' });
+  }
+  const b = req.body || {};
+  const sets = [];
+  const params = [];
+  if (typeof b.note === 'string') {
+    params.push(b.note.trim().slice(0, 200));
+    sets.push('note = $' + (params.length + 1));
+  }
+  if (typeof b.photoUrl === 'string' && b.photoUrl.length <= 2048) {
+    params.push(b.photoUrl);
+    sets.push('photo_url = $' + (params.length + 1));
+  }
+  if (typeof b.photoId === 'string' && b.photoId.length <= 128) {
+    params.push(b.photoId);
+    sets.push('photo_id = $' + (params.length + 1));
+  }
+  if (!sets.length) return res.status(400).json({ error: 'Nothing to update' });
+  try {
+    params.push(row.id);
+    await pool.query('UPDATE trail_reports SET ' + sets.join(', ') + ' WHERE id = $' + params.length, params);
+    const q = await pool.query(
+      'SELECT id, client_id, stop_id, condition, note, photo_url, username, created_at FROM trail_reports WHERE id = $1',
+      [row.id]
+    );
+    const rep = rowToReport(q.rows[0]);
+    rep.mine = true;
+    res.json({ report: rep });
+  } catch (err) {
+    console.warn('report update failed: ' + err.message);
+    res.status(500).json({ error: 'Could not update the report' });
+  }
+});
+
+app.delete('/api/reports/:id', async (req, res) => {
+  const row = await ownReportOr404(req, res);
+  if (!row) return;
+  try {
+    await pool.query('DELETE FROM trail_reports WHERE id = $1', [row.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.warn('report delete failed: ' + err.message);
+    res.status(500).json({ error: 'Could not remove the report' });
+  }
+});
+
+app.post('/api/reports/:id/flag', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return res.sendStatus(404);
+  const q = await pool.query('SELECT id, user_id FROM trail_reports WHERE id = $1', [id]);
+  const row = q.rows[0];
+  if (!row) return res.sendStatus(404);
+  if (row.user_id === req.user.id) {
+    return res.status(400).json({ error: 'You cannot flag your own report' });
+  }
+  try {
+    await pool.query(
+      'INSERT INTO report_flags (report_id, user_id, created_at) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+      [id, req.user.id, req.now]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.warn('flag insert failed: ' + err.message);
+    res.status(500).json({ error: 'Could not flag the report' });
+  }
+});
 
 // The template ships no favicon file; index.html carries an inline SVG
 // icon instead. Answer 204 here so anything that still probes
@@ -192,9 +424,23 @@ app.get('*', (req, res) => {
 });
 
 async function start() {
+  await migrate();
   const server = app.listen(port, () => console.log(`Listening on :${port}`));
   // Let Envoy retire idle upstream connections at 60s, with a 15s margin.
   server.keepAliveTimeout = 75_000;
+  // Stop accepting connections, drain in-flight requests, close the pool.
+  let closing = false;
+  async function shutdown(signal) {
+    if (closing) return;
+    closing = true;
+    console.log(`${signal} received, shutting down`);
+    server.close(() => {});
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    await pool.end().catch(() => {});
+    process.exit(0);
+  }
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 start().catch(err => { console.error(err); process.exit(1); });
