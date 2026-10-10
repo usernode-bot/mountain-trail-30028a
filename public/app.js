@@ -1020,6 +1020,9 @@
   }
 
   // ── Location tab ───────────────────────────────────────────────────────
+  var AUTO_FIX_MS = 20 * 60000;
+  var fixInFlight = false;
+  var autoLocOn = false;
   function nearestLine(loc) {
     var n = M.nearestStop(loc.lat, loc.lng);
     var d = Math.round(n.meters / 10) * 10;
@@ -1034,7 +1037,8 @@
     if (loc) {
       var acc = loc.accuracy ? ' (within ' + Math.round(loc.accuracy) + ' m)' : '';
       body.innerHTML = '<p class="font-semibold tabular-nums">' + loc.lat.toFixed(5) + ', ' + loc.lng.toFixed(5) + esc(acc) + '</p>' +
-        '<p class="mt-0.5 text-small text-muted">' + nearestLine(loc) + ' · taken at ' + fmtClock(loc.at) + '</p>';
+        '<p class="mt-0.5 text-small text-muted">' + nearestLine(loc) + ' · taken at ' + fmtClock(loc.at) + '</p>' +
+        (autoLocOn ? '<p class="mt-0.5 text-small text-muted">Updates on its own about every 20 minutes while Mountain Trail is open.</p>' : '');
     } else {
       body.innerHTML = '<p class="text-body text-muted">No location yet. Tap Update my location to take one.</p>';
     }
@@ -1068,7 +1072,20 @@
     $('msg-preview').textContent = buildMessage();
   }
   function wireLocation() {
+    function takeFix(onOk, onFail) {
+      if (fixInFlight || !('geolocation' in navigator)) return;
+      fixInFlight = true;
+      navigator.geolocation.getCurrentPosition(function (pos) {
+        fixInFlight = false;
+        lsSet('location', { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy, at: nowISO() });
+        if (onOk) onOk(pos);
+      }, function () {
+        fixInFlight = false;
+        if (onFail) onFail();
+      }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+    }
     $('loc-update').addEventListener('click', async function () {
+      if (fixInFlight) return;
       var status = $('loc-status');
       if (window.usernode && typeof window.usernode.requestPermission === 'function') {
         try {
@@ -1085,8 +1102,7 @@
         return;
       }
       status.textContent = 'Finding your position…';
-      navigator.geolocation.getCurrentPosition(function (pos) {
-        lsSet('location', { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy, at: nowISO() });
+      takeFix(function () {
         status.textContent = '';
         renderLocation();
         buildPicker();
@@ -1094,8 +1110,35 @@
         kitToast('Location updated');
       }, function () {
         status.textContent = 'Couldn\'t find your position. Try again in the open.';
-      }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+      });
     });
+    async function autoLocationTick() {
+      if (fixInFlight || !('geolocation' in navigator)) return;
+      var granted = false;
+      try {
+        if (window.usernode && typeof window.usernode.getPermission === 'function') {
+          var p = await window.usernode.getPermission('geolocation');
+          var cap = typeof window.usernode.hasCapability === 'function' ? window.usernode.hasCapability('geolocation') : true;
+          granted = !!p && p.state === 'granted' && p.active !== false && cap !== false;
+        } else if (navigator.permissions && typeof navigator.permissions.query === 'function') {
+          var q = await navigator.permissions.query({ name: 'geolocation' });
+          granted = q.state === 'granted';
+        }
+      } catch (e) { granted = false; }
+      var was = autoLocOn;
+      autoLocOn = granted;
+      if (was !== autoLocOn) renderLocation();
+      if (!autoLocOn) return;
+      var loc = lsGet('location', null);
+      if (loc && loc.at) {
+        var t = new Date(loc.at).getTime();
+        if (isFinite(t) && nowDate().getTime() - t < AUTO_FIX_MS) return;
+      }
+      takeFix(function () {
+        renderLocation();
+        renderPickerHint();
+      }, function () {});
+    }
     function savedField(id, key) {
       var el = $(id);
       el.value = lsGet(key, '') || '';
@@ -1116,6 +1159,8 @@
       copyMessage(text);
     });
     $('copy-btn').addEventListener('click', function () { copyMessage(buildMessage()); });
+    autoLocationTick();
+    setInterval(autoLocationTick, 60000);
   }
   async function copyMessage(text) {
     try {
