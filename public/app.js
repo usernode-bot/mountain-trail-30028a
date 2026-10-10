@@ -1116,6 +1116,27 @@
       copyMessage(text);
     });
     $('copy-btn').addEventListener('click', function () { copyMessage(buildMessage()); });
+    var S = window.MT_SHARE;
+    function sendTo(kind) {
+      var contact = ($('contact-field').value || '').trim();
+      var text = buildMessage();
+      var url = kind === 'wa' ? S.whatsappLink(contact, text) : S.smsLink(contact, text);
+      if (!url) {
+        kitToast('Add a basecamp contact to send this');
+        $('contact-field').focus();
+        return;
+      }
+      var w = window.open(url, '_blank');
+      if (!w) {
+        kitToast(kind === 'wa'
+          ? 'Couldn\'t open WhatsApp. Use Copy message instead.'
+          : 'Couldn\'t open messages. Use Copy message instead.');
+        return;
+      }
+      try { w.opener = null; } catch (e) {}
+    }
+    $('wa-btn').addEventListener('click', function () { sendTo('wa'); });
+    $('sms-btn').addEventListener('click', function () { sendTo('sms'); });
   }
   async function copyMessage(text) {
     try {
