@@ -392,7 +392,7 @@
         '<span class="stop-node' + stopTone(s) + '">' + iconSvg(stopIcon(s), 'h-5 w-5') + '</span>' +
         '<div class="stop-body">' +
         '<p class="text-body font-semibold">' + esc(s.name) + '</p>' +
-        '<p class="text-small text-muted">' + fmtM(s.elevM) + ' m, km ' + fmtKm(s.km) + '. ' + esc(s.short) + '</p>' +
+        '<p class="mt-1 text-small text-muted">' + fmtM(s.elevM) + ' m, km ' + fmtKm(s.km) + '. ' + esc(s.short) + '</p>' +
         (facs ? '<p class="fac">' + facs + '</p>' : '') +
         condLineHtml(s) +
         (open ? expandedHtml(s) : '') +
@@ -1161,6 +1161,10 @@
   // ── Boot ───────────────────────────────────────────────────────────────
   async function boot() {
     picker = $('stop-picker');
+    // The guide is part of the app, so it renders from trail-data at once,
+    // before anything waits on the network: header, profile and all nine
+    // stops now, skeleton bars only where the reports will land.
+    renderReportsAndTrail();
     try {
       var me = await api('/api/me');
       if (me && me.ok && me.data) {

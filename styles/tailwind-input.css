@@ -178,10 +178,13 @@
   .stop-node-warn { border-color: rgb(var(--warn)); }
   .stop-node-danger { border-color: rgb(var(--danger)); }
   .stop-body { @apply min-w-0 flex-1 pt-0.5; }
-  .fac { @apply mt-0.5 flex gap-3 text-small; }
+  .fac { @apply mt-1 flex gap-3 text-small; }
   .fac > span { @apply inline-flex items-center gap-1; }
   .fac-water { color: rgb(var(--water)); }
-  .leg-line { @apply pb-0.5 pl-14 text-small text-muted; }
+  /* The walk to the next stop sits on the dashed rail between the nodes:
+     its padding plus the stop rows' 6 px keeps it about 12 px clear of
+     both, and the 56 px indent puts it past the node with the stop text. */
+  .leg-line { @apply py-1.5 pl-14 text-small text-muted; }
 
   /* A stop's condition line, with the dot in the condition's colour. */
   .cond-line {
@@ -247,10 +250,15 @@
     @apply flex h-14 w-14 flex-none items-center justify-center overflow-hidden rounded-lg bg-raised text-muted;
   }
 
-  /* The bottom tab bar, fixed above the home indicator. */
+  /* The bottom tab bar, fixed above the home indicator. The bar's
+     background runs the full width; its items stay within the content
+     column's width, centred, so desktop tabs sit by the content. */
   .tab-bar {
     @apply fixed inset-x-0 bottom-0 z-40 flex border-t border-line bg-surface;
     padding: 4px 4px calc(12px + var(--un-safe-inset-bottom, env(safe-area-inset-bottom, 0px)));
+  }
+  .tab-bar-items {
+    @apply mx-auto flex w-full max-w-md px-4;
   }
   .tab-item {
     @apply flex flex-1 flex-col items-center justify-center gap-0.5 text-small text-muted
