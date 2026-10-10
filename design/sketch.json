@@ -1,0 +1,15 @@
+{
+  "note": "The featured card this app's creator was shown while it was being made: its emoji (also the app's icon, set in dapp.json), a tagline and a few points that sum up the description in a few words. It is a picture of the idea, not a design: it shows no screen and sets no layout, words or colours. Build from the description in the first version's request; where the two differ, the description wins.",
+  "kind": "featured-card",
+  "emoji": "⛰️",
+  "tagline": "An offline trail guide and safety companion for hikers",
+  "points": [
+    "Offline trail guide with posts, water and camps",
+    "One-tap condition reports with photos",
+    "Auto packing checklist by days and group size",
+    "Share last location with basecamp contact"
+  ],
+  "source": "model",
+  "model": "z-ai/glm-5.3-flash",
+  "createdAt": "2026-10-10T03:53:17.480Z"
+}
