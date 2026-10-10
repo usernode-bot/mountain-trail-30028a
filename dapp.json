@@ -50,6 +50,11 @@
       "name": "Location tab",
       "path": "/#location",
       "expectText": "Share with basecamp"
+    },
+    {
+      "name": "Location tab sends to basecamp",
+      "path": "/#location",
+      "expectText": "Send on WhatsApp"
     }
   ]
 }
