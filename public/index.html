@@ -225,7 +225,10 @@
 
       <div class="card mt-4">
         <div id="loc-body" class="text-body"></div>
-        <button type="button" id="loc-update" class="btn-secondary mt-3">Update my location</button>
+        <div class="mt-3 flex flex-col gap-2">
+          <button type="button" id="loc-update" class="btn-secondary">Update my location</button>
+          <button type="button" id="coords-copy" class="btn-secondary" hidden>Copy coordinates</button>
+        </div>
         <p id="loc-status" class="mt-2 text-small text-muted"></p>
       </div>
 
@@ -241,9 +244,17 @@
       </div>
       <div class="mt-3 flex flex-col gap-2">
         <button type="button" id="share-btn" class="btn-primary">Share with basecamp</button>
+        <div class="grid grid-cols-2 gap-2">
+          <a id="wa-btn" class="btn-secondary" target="_blank" rel="noopener" aria-label="Send by WhatsApp">WhatsApp</a>
+          <a id="sms-btn" class="btn-secondary" target="_blank" rel="noopener" aria-label="Send by SMS">SMS</a>
+        </div>
         <button type="button" id="copy-btn" class="btn-secondary">Copy message</button>
-        <button type="button" id="wa-btn" class="btn-secondary"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l1.3-3.9A8 8 0 1 1 8 18.8z"/></svg>Send on WhatsApp</button>
-        <button type="button" id="sms-btn" class="btn-secondary"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H10l-4 3v-3H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/><path d="M8 10h8"/><path d="M8 13h5"/></svg>Send by SMS</button>
+      </div>
+      <p class="mt-2 text-small text-muted">WhatsApp needs mobile data. SMS needs only phone signal. With no signal at all, read the coordinates out over radio.</p>
+
+      <div id="share-queue-wrap" hidden>
+        <h2 class="section-label mt-6">Waiting for signal</h2>
+        <ul id="share-queue" class="list"></ul>
       </div>
     </section>
   </main>

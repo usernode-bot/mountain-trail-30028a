@@ -10,6 +10,7 @@
 
   var M = window.MT_TRAIL;
   var P = window.MT_PACKING;
+  var S = window.MT_SHARE;
   var MOUNTAIN = M.MOUNTAIN;
   var STOPS = M.STOPS;
   var STOP_BY_ID = M.STOP_BY_ID;
@@ -157,12 +158,20 @@
     setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 2600);
   }
   // Presents content in a bottom sheet, or a plain overlay when the kit is
-  // missing. Returns nothing; the caller wires its own buttons.
+  // missing. Returns { dismiss } either way, so the caller can close the
+  // sheet itself and learn when it is gone.
   function presentSheet(contentEl) {
+    var onDismiss = null;
+    function fireDismiss() {
+      if (onDismiss) { var f = onDismiss; onDismiss = null; f(); }
+    }
     try {
       if (window.unNative && typeof unNative.presentSheet === 'function') {
-        unNative.presentSheet({ contentEl: contentEl });
-        return;
+        var handle = unNative.presentSheet({ contentEl: contentEl, onDismiss: fireDismiss });
+        var kitDismiss = handle && typeof handle.dismiss === 'function'
+          ? function () { try { handle.dismiss(); } catch (e) {} }
+          : function () { try { if (unNative.dismissTop) unNative.dismissTop(); } catch (e) {} };
+        return { dismiss: function () { kitDismiss(); fireDismiss(); } };
       }
     } catch (e) {}
     var backdrop = document.createElement('div');
@@ -173,8 +182,14 @@
     backdrop.appendChild(card);
     document.body.appendChild(backdrop);
     backdrop.addEventListener('click', function (e) {
-      if (e.target === backdrop) backdrop.remove();
+      if (e.target === backdrop) { backdrop.remove(); fireDismiss(); }
     });
+    return {
+      dismiss: function () {
+        backdrop.remove();
+        fireDismiss();
+      },
+    };
   }
   function presentModal(contentEl) {
     try {
@@ -1042,6 +1057,7 @@
     } else {
       body.innerHTML = '<p class="text-body text-muted">No location yet. Tap Update my location to take one.</p>';
     }
+    $('coords-copy').hidden = !loc;
     renderMsgPreview();
   }
   function fmtWhen(iso) {
@@ -1068,8 +1084,149 @@
     parts.push('Indonesia emergency number: 112.');
     return parts.join(' ');
   }
+  function contactValue() {
+    return ($('contact-field').value || '').trim();
+  }
   function renderMsgPreview() {
-    $('msg-preview').textContent = buildMessage();
+    var text = buildMessage();
+    $('msg-preview').textContent = text;
+    var contact = contactValue();
+    // Real anchors: the user's tap opens them directly, which a
+    // cross-origin frame needs. No window.open.
+    $('wa-btn').href = S.whatsappUrl(text, contact);
+    $('sms-btn').href = S.smsUrl(text, contact);
+  }
+
+  // ── Share queue: messages tapped with no signal, kept on the phone ─────
+  var SHARE_QUEUE_MAX = 5;
+  var shareQueueRefreshing = null; // the Back online sheet's re-render, while open
+  function shareQueueAll() { return lsGet('shareQueue', []); }
+  function shareQueueSave(q) { lsSet('shareQueue', q); }
+  function shareQueueAdd(entry) {
+    shareQueueSave(S.queueWith(shareQueueAll(), entry, SHARE_QUEUE_MAX));
+  }
+  function shareQueueRemove(id) {
+    shareQueueSave(shareQueueAll().filter(function (e) { return e.id !== id; }));
+  }
+  function renderShareQueue() {
+    var q = shareQueueAll();
+    $('share-queue-wrap').hidden = q.length === 0;
+    var ul = $('share-queue');
+    ul.textContent = '';
+    shareQueueRows(afterQueueChange).forEach(function (row) { ul.appendChild(row); });
+  }
+  function afterQueueChange() {
+    renderShareQueue();
+    if (shareQueueRefreshing) shareQueueRefreshing();
+  }
+  // One li per waiting message. Message text goes in with textContent,
+  // never innerHTML. Removing a row happens on the next tick so the tap's
+  // navigation to WhatsApp or SMS is not interrupted.
+  function shareQueueRows(onChange) {
+    var contact = contactValue();
+    var rows = [];
+    shareQueueAll().forEach(function (entry) {
+      var li = document.createElement('li');
+      li.className = 'list-row items-start';
+      var body = document.createElement('div');
+      body.className = 'min-w-0 flex-1';
+      li.appendChild(body);
+      var title = document.createElement('p');
+      title.className = 'text-body';
+      title.textContent = 'Message from ' + fmtWhen(entry.at);
+      body.appendChild(title);
+      if (entry.coords) {
+        var coords = document.createElement('p');
+        coords.className = 'text-small text-muted tabular-nums';
+        coords.textContent = entry.coords;
+        body.appendChild(coords);
+      }
+      var grid = document.createElement('div');
+      grid.className = 'mt-2 grid grid-cols-3 gap-2';
+      var wa = document.createElement('a');
+      wa.className = 'btn-secondary';
+      wa.target = '_blank';
+      wa.rel = 'noopener';
+      wa.setAttribute('aria-label', 'Send by WhatsApp');
+      wa.textContent = 'WhatsApp';
+      wa.href = S.whatsappUrl(entry.text, contact);
+      wa.addEventListener('click', function (e) {
+        if (!navigator.onLine) {
+          e.preventDefault();
+          kitToast('Still no signal. It stays in Waiting for signal.');
+          return;
+        }
+        setTimeout(function () { shareQueueRemove(entry.id); onChange(); }, 0);
+      });
+      var sms = document.createElement('a');
+      sms.className = 'btn-secondary';
+      sms.target = '_blank';
+      sms.rel = 'noopener';
+      sms.setAttribute('aria-label', 'Send by SMS');
+      sms.textContent = 'SMS';
+      sms.href = S.smsUrl(entry.text, contact);
+      sms.addEventListener('click', function () {
+        setTimeout(function () { shareQueueRemove(entry.id); onChange(); }, 0);
+      });
+      var rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'btn-secondary';
+      rm.textContent = 'Remove';
+      rm.addEventListener('click', function () {
+        shareQueueRemove(entry.id);
+        onChange();
+      });
+      grid.appendChild(wa);
+      grid.appendChild(sms);
+      grid.appendChild(rm);
+      body.appendChild(grid);
+      rows.push(li);
+    });
+    return rows;
+  }
+  function maybeShareSheet() {
+    if (shareQueueRefreshing) return; // a queue sheet is already open
+    if (!shareQueueAll().length) return;
+    var wrap = document.createElement('div');
+    wrap.className = 'flex flex-col gap-3 p-4';
+    var h = document.createElement('h2');
+    h.className = 'font-display text-heading';
+    h.textContent = 'Back online';
+    wrap.appendChild(h);
+    var p = document.createElement('p');
+    p.className = 'text-body text-muted';
+    wrap.appendChild(p);
+    var ul = document.createElement('ul');
+    ul.className = 'list mt-3';
+    wrap.appendChild(ul);
+    var handle = presentSheet(wrap);
+    function close() {
+      shareQueueRefreshing = null;
+      handle.dismiss();
+    }
+    shareQueueRefreshing = function () {
+      var q = shareQueueAll();
+      p.textContent = q.length === 1
+        ? 'A location message you saved with no signal is ready to send.'
+        : q.length + ' location messages you saved with no signal are ready to send.';
+      ul.textContent = '';
+      shareQueueRows(function () {
+        renderShareQueue();
+        if (!shareQueueAll().length) close();
+      }).forEach(function (row) { ul.appendChild(row); });
+    };
+    shareQueueRefreshing();
+  }
+  function seedDemoShare() {
+    if (lsGet('seededShare', false)) return;
+    var loc = lsGet('location', null);
+    shareQueueAdd({
+      id: uuid(),
+      text: buildMessage(),
+      coords: loc ? S.coordsLine(loc.lat, loc.lng) : null,
+      at: new Date(nowDate().getTime() - 20 * 60000).toISOString(),
+    });
+    lsSet('seededShare', true);
   }
   function wireLocation() {
     function takeFix(onOk, onFail) {
@@ -1159,34 +1316,34 @@
       copyMessage(text);
     });
     $('copy-btn').addEventListener('click', function () { copyMessage(buildMessage()); });
-    var S = window.MT_SHARE;
-    function sendTo(kind) {
-      var contact = ($('contact-field').value || '').trim();
-      var text = buildMessage();
-      var url = kind === 'wa' ? S.whatsappLink(contact, text) : S.smsLink(contact, text);
-      if (!url) {
-        kitToast('Add a basecamp contact to send this');
-        $('contact-field').focus();
-        return;
+    $('coords-copy').addEventListener('click', function () {
+      var loc = lsGet('location', null);
+      if (loc) copyMessage(S.coordsLine(loc.lat, loc.lng), 'Coordinates copied');
+    });
+    // Offline, WhatsApp cannot open: keep the message on the phone instead.
+    // Online, the anchor opens wa.me as normal.
+    $('wa-btn').addEventListener('click', function (e) {
+      if (!navigator.onLine) {
+        e.preventDefault();
+        var loc = lsGet('location', null);
+        shareQueueAdd({
+          id: uuid(),
+          text: buildMessage(),
+          coords: loc ? S.coordsLine(loc.lat, loc.lng) : null,
+          at: nowISO(),
+        });
+        renderShareQueue();
+        kitToast('No signal. Saved to send when you\'re back online.');
       }
-      var w = window.open(url, '_blank');
-      if (!w) {
-        kitToast(kind === 'wa'
-          ? 'Couldn\'t open WhatsApp. Use Copy message instead.'
-          : 'Couldn\'t open messages. Use Copy message instead.');
-        return;
-      }
-      try { w.opener = null; } catch (e) {}
-    }
-    $('wa-btn').addEventListener('click', function () { sendTo('wa'); });
-    $('sms-btn').addEventListener('click', function () { sendTo('sms'); });
+    });
     autoLocationTick();
     setInterval(autoLocationTick, 60000);
   }
-  async function copyMessage(text) {
+  async function copyMessage(text, doneMsg) {
+    var done = doneMsg || 'Message copied';
     try {
       await navigator.clipboard.writeText(text);
-      kitToast('Message copied');
+      kitToast(done);
       return;
     } catch (e) {}
     try {
@@ -1196,7 +1353,7 @@
       ta.select();
       document.execCommand('copy');
       ta.remove();
-      kitToast('Message copied');
+      kitToast(done);
     } catch (e) {
       kitToast('Couldn\'t copy. Select the message text yourself.');
     }
@@ -1246,9 +1403,14 @@
     buildPicker();
     wirePacking();
     wireLocation();
+    if (demo) seedDemoShare(); // after wireLocation fills the name and contact fields
     wirePhotoInput();
     renderPacking();
     renderLocation();
+    renderShareQueue();
+    if (navigator.onLine && shareQueueAll().length) {
+      kitToast('A saved location message is waiting to send. See Location.');
+    }
     renderReportsAndTrail();
     renderPickerHint();
     TABS.forEach(function (t) {
@@ -1273,6 +1435,7 @@
       renderHeader();
       replayQueue();
       loadReports();
+      maybeShareSheet();
     });
     window.addEventListener('offline', renderHeader);
     loadReports();
