@@ -7,5 +7,8 @@
   "visibility": {
     "build": "public",
     "view": "public"
-  }
+  },
+  "admins": [
+    "dendiharyawan"
+  ]
 }
