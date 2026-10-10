@@ -14,7 +14,7 @@
   "permissions": [
     {
       "capability": "geolocation",
-      "reason": "Reads your position to share it with basecamp and pick the stop you report from"
+      "reason": "Reads your position when you tap Update my location, to share it with basecamp, pick the stop you report from, and save it to Mountain Trail"
     }
   ],
   "tests": [

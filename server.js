@@ -151,6 +151,7 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 // The guide ships with the app (public/trail-data.js); the server requires
 // the same file so a report can only name a real stop and a real condition.
 const trailData = require('./public/trail-data.js');
+const { parseLocation } = require('./lib/location.js');
 const STOP_IDS = new Set(trailData.STOPS.map((s) => s.id));
 const CONDITION_IDS = new Set(trailData.CONDITIONS.map((c) => c.id));
 
@@ -179,6 +180,23 @@ async function migrate() {
     created_at TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (report_id, user_id)
   )`);
+  // Hikers' latest locations, sent on each "Update my location" tap. Private
+  // by design: stored so a future change could build on them, shown to
+  // nobody — there is deliberately no GET route for this table, and it is
+  // excluded from the staging preview's data copy. Append-only: rows are
+  // never edited or removed, only superseded by a newer client_id row.
+  await pool.query(`CREATE TABLE IF NOT EXISTS hiker_locations (
+    id SERIAL PRIMARY KEY,
+    client_id TEXT UNIQUE NOT NULL,
+    user_id TEXT NOT NULL,
+    username TEXT NOT NULL,
+    lat DOUBLE PRECISION NOT NULL CHECK (lat BETWEEN -90 AND 90),
+    lng DOUBLE PRECISION NOT NULL CHECK (lng BETWEEN -180 AND 180),
+    accuracy_m REAL,
+    taken_at TIMESTAMPTZ NOT NULL,
+    received_at TIMESTAMPTZ NOT NULL
+  )`);
+  await pool.query("COMMENT ON TABLE hiker_locations IS 'staging:private'");
 }
 
 function rowToReport(r) {
@@ -290,6 +308,43 @@ app.post('/api/reports', async (req, res) => {
   } catch (err) {
     console.warn('report insert failed: ' + err.message);
     res.status(500).json({ error: 'Could not save the report' });
+  }
+});
+
+// POST /api/locations: a hiker's latest position, sent on each "Update my
+// location" tap (queued on the phone while offline, replayed on reconnect).
+// Stored but never served: there is no GET route, so nothing in the app can
+// show another hiker's location. Idempotent by client_id like reports, so a
+// replay whose reply was lost is safe.
+app.post('/api/locations', async (req, res) => {
+  const loc = parseLocation(req.body, req.now);
+  if (!loc) return res.status(400).json({ error: 'Invalid location' });
+  try {
+    await pool.query(
+      `INSERT INTO hiker_locations (client_id, user_id, username, lat, lng, accuracy_m, taken_at, received_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (client_id) DO NOTHING`,
+      [loc.clientId, req.user.id, req.user.username, loc.lat, loc.lng, loc.accuracy, loc.takenAt, req.now]
+    );
+    const q = await pool.query(
+      'SELECT client_id, user_id, taken_at, received_at FROM hiker_locations WHERE client_id = $1',
+      [loc.clientId]
+    );
+    const row = q.rows[0];
+    if (!row || row.user_id !== req.user.id) {
+      // The client_id already belongs to another account; never return it.
+      return res.status(409).json({ error: 'Invalid location' });
+    }
+    res.status(201).json({
+      location: {
+        clientId: row.client_id,
+        takenAt: row.taken_at instanceof Date ? row.taken_at.toISOString() : row.taken_at,
+        receivedAt: row.received_at instanceof Date ? row.received_at.toISOString() : row.received_at,
+      },
+    });
+  } catch (err) {
+    console.warn('location insert failed: ' + err.message);
+    res.status(500).json({ error: 'Could not save the location' });
   }
 });
 
