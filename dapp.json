@@ -1,6 +1,7 @@
 {
   "description": "An offline trail guide and safety companion for hikers",
   "icon": {
+    "image": "brand/icon.png",
     "emoji": "⛰️"
   },
   "secrets": [],
