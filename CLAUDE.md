@@ -163,6 +163,15 @@ Re-theme by changing the token values there, keeping every text pair at
 
 ## App-specific conventions
 
+- The app reads in English or Bahasa Indonesia. The language lives in
+  `mt:lang` in localStorage (the same key in the demo and outside it) and is
+  never sent to the server; English is the default and any unknown value is
+  English. New user-facing strings go in BOTH dictionaries in
+  `public/i18n.js` (with a `data-i18n`/`data-i18n-label`/
+  `data-i18n-placeholder` attribute in `index.html` for static text); the
+  test in `test/i18n.test.js` keeps the two in step. Stop names are never
+  translated. Reports store condition ids on the server; labels are only
+  for display and translate per viewer.
 - The guide data (mountain, stops, conditions) lives in
   `public/trail-data.js` and is shared with `server.js`, which validates
   every report's `stop_id` and `condition` against it. The stop table in

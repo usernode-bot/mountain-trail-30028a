@@ -1,0 +1,585 @@
+/*
+ * Mountain Trail's languages: English (the source) and Bahasa Indonesia.
+ * Pure: strings and formatters in, strings out, so it can be unit tested.
+ * app.js reads the chosen language from localStorage and routes every
+ * rendered string through this module. The id dictionary holds translations
+ * for the guide data too (stops, conditions, packing items) keyed by their
+ * stable ids; the English source text stays in trail-data.js and packing.js.
+ */
+(function (root, factory) {
+  var api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  root.MT_I18N = api;
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  var LANGS = ['en', 'id'];
+
+  var EN_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var ID_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+
+  var STRINGS = {
+    en: {
+      // ── Shared chrome ──
+      'demo.line': 'Staging demo: the hikers, reports and trip here are made up.',
+      'tab.trail': 'Trail',
+      'tab.report': 'Report',
+      'tab.packing': 'Packing',
+      'tab.location': 'Location',
+
+      // ── Trail tab ──
+      'trail.route': 'Cibodas route to Puncak Gede, {elev} m. {km} km and {climb} m of climbing, about {hours} hours up.',
+      'trail.hours': '5 to 7',
+      'trail.saved': 'Guide saved for offline use',
+      'trail.offline': 'Offline. Reports from {time}',
+      'trail.section': 'Basecamp to summit',
+      'trail.approx': 'Heights, distances and times are approximate guide figures for the Cibodas route, not a survey.',
+      'strip.status': 'Trail status',
+      'profile.aria': 'Height profile from basecamp to summit',
+      'profile.base': 'Basecamp {m} m',
+      'profile.summit': 'Summit {m} m',
+      'strip.none': 'No trail warnings in the last 24 hours',
+      'strip.none.sub': 'Seen something? The Report tab takes one tap.',
+      'strip.open': 'Open {name}',
+      'strip.at': 'at',
+      'strip.reported': 'Reported {ago}',
+      'reports.more.one': '{n} more report in the last 24 hours',
+      'reports.more.other': '{n} more reports in the last 24 hours',
+      'stops.noreports': 'No reports in 24 h',
+      'stops.more': ', and {n} more',
+      'stops.noreports.here': 'No reports here in the last 24 hours.',
+      'stops.report.here': 'Report here',
+      'fac.water': 'Water',
+      'fac.camp': 'Camp',
+      'who.you': 'You',
+      'unit.h': 'h',
+      'unit.min': 'min',
+
+      // ── Report tab ──
+      'report.title': 'Report the trail',
+      'report.sub': 'Tap what you see. It sends straight away, or as soon as you have signal.',
+      'report.where': 'Where you are',
+      'report.section': 'Latest reports, last 24 hours',
+      'pick.closest': 'Closest stop to your last location, {ago}',
+      'pick.near': 'Your last location is closest to {name}',
+      'pick.last': 'The stop you reported from last time',
+      'pick.base': 'Basecamp, where the route starts',
+      'sent.title': '{cond} at {stop} reported.',
+      'sent.waiting': 'Kept on this phone. It sends when the signal is back.',
+      'sent.live': 'Other hikers see it on the trail now.',
+      'reports.empty': 'No reports in the last 24 hours.',
+      'reports.empty.sub': 'Seen something on the trail? Report it.',
+      'reports.updated': 'Updated {time}.',
+      'reports.offline': 'Offline. Reports from {time}.',
+      'err.reports': "Couldn't load today's reports.",
+      'err.still': 'The guide, packing list and location still work.',
+      'retry': 'Retry',
+      'act.photo': 'Add photo',
+      'act.note': 'Add note',
+      'undo': 'Undo',
+      'cancel': 'Cancel',
+      'note.title': 'Add a note',
+      'note.ph': 'e.g. The rope is fine, the rocks are wet',
+      'note.count': '{n} of 200 characters',
+      'note.save': 'Save note',
+      'menu.options': 'Report options',
+      'menu.remove': 'Remove report',
+      'menu.flag': 'Flag as wrong or inappropriate',
+      'photo.alt': 'Report photo',
+      'photo.open': 'Open the photo',
+
+      // ── Packing tab ──
+      'pack.title': 'Pack for the climb',
+      'pack.sub': 'The list builds itself from your days and group, and from this mountain.',
+      'pack.days': 'Days on the mountain',
+      'pack.people': 'People in your group',
+      'pack.days.fewer': 'One day fewer',
+      'pack.days.more': 'One day more',
+      'pack.people.fewer': 'One person fewer',
+      'pack.people.more': 'One person more',
+      'pack.reset': 'Start over',
+      'pack.count': '{done} of {total} packed',
+      'reset.title': 'Start over?',
+      'reset.msg': 'This clears every packed tick. The list stays.',
+
+      // ── Location tab ──
+      'loc.title': 'Last location',
+      'loc.sub': 'Your coordinates, ready to send to basecamp or to family.',
+      'loc.update': 'Update my location',
+      'loc.copy': 'Copy coordinates',
+      'loc.name': 'Your name',
+      'loc.contact': 'Basecamp contact',
+      'loc.name.ph': 'e.g. Ayu',
+      'loc.contact.ph': 'e.g. 0812 0000 0000',
+      'loc.optional': "Both optional, kept on this phone only. Every message carries Indonesia's emergency number, 112.",
+      'loc.msg.section': 'Message to send',
+      'loc.share': 'Share with basecamp',
+      'loc.copymsg': 'Copy message',
+      'loc.hint': 'WhatsApp needs mobile data. SMS needs only phone signal. With no signal at all, read the coordinates out over radio.',
+      'loc.near': 'About {d} m from {name}, {elev} m',
+      'loc.far': 'About {km} km from the route',
+      'loc.within': ' (within {m} m)',
+      'loc.taken': ' · taken at {time}',
+      'loc.auto': 'Updates on its own about every 20 minutes while Mountain Trail is open.',
+      'loc.none': 'No location yet. Tap Update my location to take one.',
+      'loc.sending': 'Sending your location…',
+      'loc.sent': 'Sent to Mountain Trail at {time}. Not shown to other hikers.',
+      'loc.sendfail': "This location couldn't be sent. Tap Update my location to try again.",
+      'loc.queued': 'Not sent yet. Kept on this phone, it sends when the signal is back.',
+      'loc.perm': "Location permission is off for Mountain Trail. Turn it on in Homeroom's settings for this app.",
+      'loc.nodevice': "This device can't read a position.",
+      'loc.finding': 'Finding your position…',
+      'loc.findfail': "Couldn't find your position. Try again in the open.",
+
+      // ── The message and the share queue ──
+      'msg.who': 'This is {name} on Gede Pangrango (Cibodas route).',
+      'msg.hiker': 'a hiker',
+      'msg.loc': 'My last location, {when}: {coords}{acc}, {near}.',
+      'msg.map': 'Map: {url}',
+      'msg.noloc': 'Location not found yet.',
+      'msg.contact': 'Basecamp Cibodas contact: {contact}.',
+      'msg.emergency': 'Indonesia emergency number: 112.',
+      'share.section': 'Waiting for signal',
+      'share.wa': 'Send by WhatsApp',
+      'share.sms': 'Send by SMS',
+      'share.back': 'Back online',
+      'share.from': 'Message from {when}',
+      'share.remove': 'Remove',
+      'share.ready.one': 'A location message you saved with no signal is ready to send.',
+      'share.ready.other': '{n} location messages you saved with no signal are ready to send.',
+
+      // ── Times and toasts ──
+      'ago.now': 'just now',
+      'ago.min': '{n} min ago',
+      'ago.hour': '{n} h ago',
+      'ago.day': 'over a day ago',
+      'toast.account': 'Make a Homeroom account to report conditions',
+      'toast.sendfail': 'That report could not be sent. Try again.',
+      'toast.removed': 'Report removed',
+      'toast.removefail': "Couldn't remove the report. Try again.",
+      'toast.note': 'Note added',
+      'toast.notefail': "Couldn't add the note. Try again.",
+      'toast.photo.offline': 'Photos need a connection. The report keeps its note.',
+      'toast.photo.na': 'Photos are unavailable here. The report keeps its note.',
+      'toast.photo.pending': 'Photo attached. It sends with the report.',
+      'toast.photo': 'Photo added',
+      'toast.photofail': "Couldn't attach the photo. Try again.",
+      'toast.photo.error': 'Photos are unavailable right now. The report keeps its note.',
+      'toast.flagged': "Flagged. It's hidden for you.",
+      'toast.flagown': "You can't flag your own report",
+      'toast.flagfail': "Couldn't flag the report. Try again.",
+      'toast.cleared': 'List cleared',
+      'toast.nosignal': 'Still no signal. It stays in Waiting for signal.',
+      'toast.saved.offline': "No signal. Saved to send when you're back online.",
+      'toast.loc': 'Location updated',
+      'toast.queued': 'A saved location message is waiting to send. See Location.',
+      'toast.copied': 'Message copied',
+      'toast.coords': 'Coordinates copied',
+      'toast.copyfail': "Couldn't copy. Select the message text yourself.",
+
+      // ── Conditions (English mirrors of trail-data.js) ──
+      'cond.slippery.label': 'Slippery',
+      'cond.slippery.hint': 'Wet rock or mud',
+      'cond.no-water.label': 'No water',
+      'cond.no-water.hint': 'Source dry or barely flowing',
+      'cond.heavy-fog.label': 'Heavy fog',
+      'cond.heavy-fog.hint': "Can't see the next marker",
+      'cond.landslide.label': 'Landslide',
+      'cond.landslide.hint': 'Path buried or broken',
+
+      // ── Stops (English mirrors of trail-data.js) ──
+      'stop.cibodas.short': 'Register and show your permit',
+      'stop.cibodas.detail': 'The national park gate. Register, show your SIMAKSI permit and pay the fee here. Porters and guides can be arranged at the entrance, and the last shops and signal are across the road.',
+      'stop.telaga-biru.short': 'Blue lake beside the path',
+      'stop.telaga-biru.detail': 'A small blue lake a short walk up from the gate, with a shelter and a viewpoint over the water. The forest here is thick moss and tree ferns.',
+      'stop.rawa-gayonggong.short': 'Boardwalk over the marsh',
+      'stop.rawa-gayonggong.detail': 'A marsh crossing on a plank boardwalk. The planks stay wet and mossy: walk the middle, not the edges.',
+      'stop.panyancangan.short': 'Shelter, side path to Cibeureum falls',
+      'stop.panyancangan.detail': 'A rest shelter at the foot of the long climb. A side path drops to the Cibeureum waterfalls. From here the trail steepens for roughly an hour and a half.',
+      'stop.air-panas.short': 'Hot stream crossing, hold the rope',
+      'stop.air-panas.detail': 'A hot spring stream crossing the trail, with a fixed rope to hold. The rocks around the crossing are slick: the steam fogs glasses and headlamps.',
+      'stop.kandang-batu.short': 'Shelter and spring',
+      'stop.kandang-batu.detail': 'A stone shelter and a dependable spring, the first reliable refill above the gate. A quiet camp for the night if the main camp below the summit is full.',
+      'stop.kandang-badak.short': 'Main camp, path to Pangrango',
+      'stop.kandang-badak.detail': 'The main camp area, with a spring and room for tents. The side path to Mount Pangrango leaves from here. Nights drop close to 5 °C.',
+      'stop.tanjakan-setan.short': 'Steep rock with ropes',
+      'stop.tanjakan-setan.detail': '"The devil’s climb": a steep rocky ramp with fixed ropes. Slow going, and the exposed rock breaks in heavy rain.',
+      'stop.puncak-gede.short': 'Crater rim, no water, no camping',
+      'stop.puncak-gede.detail': 'The summit crater rim at 2,958 m, with the yellow sulphur craters below. No water and no camping. Fog closes in fast from late morning.',
+
+      // ── Packing groups (English mirrors of packing.js) ──
+      'pack.group.shared': 'Shared by the group',
+      'pack.group.each': 'Each person',
+      'pack.group.food': 'Food and water',
+
+      // ── Packing items (English mirrors of packing.js) ──
+      'pack.permit.label': 'Climbing permit (SIMAKSI)',
+      'pack.permit.note': 'Booked ahead; ID copies for each person',
+      'pack.tent.label': 'Tent for 2',
+      'pack.tent.note': 'Nights near 5 °C above 2,000 m',
+      'pack.stove.label': 'Stove and pot set',
+      'pack.stove.note': 'One cooks for the group',
+      'pack.gas.label': 'Gas canister',
+      'pack.gas.note': 'Cooking and hot drinks',
+      'pack.first-aid.label': 'First aid kit',
+      'pack.first-aid.note': 'Blister plasters and painkillers at least',
+      'pack.tablets.label': 'Water purification tablets',
+      'pack.tablets.note': 'Spring water needs treating',
+      'pack.rubbish.label': 'Rubbish bags',
+      'pack.rubbish.note': 'All rubbish carried down',
+      'pack.rain-jacket.label': 'Rain jacket',
+      'pack.rain-jacket.note': 'Rain most afternoons',
+      'pack.warm-jacket.label': 'Warm jacket',
+      'pack.warm-jacket.note': 'Nights near 5 °C',
+      'pack.gloves.label': 'Gloves and beanie',
+      'pack.gloves.note': 'Cold on the crater rim',
+      'pack.headlamp.label': 'Headlamp and spare batteries',
+      'pack.headlamp.note': 'Summit starts before dawn',
+      'pack.shoes.label': 'Shoes with grip',
+      'pack.shoes.note': 'Wet rock and roots',
+      'pack.whistle.label': 'Whistle',
+      'pack.whistle.note': 'Three blasts for help',
+      'pack.power-bank.label': 'Power bank',
+      'pack.power-bank.note': 'No charging on the mountain',
+      'pack.medicines.label': 'Personal medicines',
+      'pack.medicines.note': 'Own prescription and blister care',
+      'pack.sleeping-bag.label': 'Sleeping bag (5 °C)',
+      'pack.sleeping-bag.note': 'Nights near 5 °C',
+      'pack.sleeping-mat.label': 'Sleeping mat',
+      'pack.sleeping-mat.note': 'Ground is cold and damp',
+      'pack.dry-clothes.label': 'Dry clothes in a plastic bag',
+      'pack.dry-clothes.note': 'Dry layer for camp',
+      'pack.water.label': 'Water',
+      'pack.water.note': '2 L each; refill at Kandang Batu and Kandang Badak',
+      'pack.meals.label': 'Meals',
+      'pack.meals.note': 'Three a day, minus the first breakfast and the last dinner',
+      'pack.snacks.label': 'Trail snacks',
+      'pack.snacks.note': 'Two a day while walking',
+      'pack.spare-meal.label': 'Spare meal',
+      'pack.spare-meal.note': 'One extra each, in case of a cold night',
+    },
+
+    id: {
+      // ── Shared chrome ──
+      'demo.line': 'Demo staging: pendaki, laporan dan perjalanan di sini dibuat-buat.',
+      'tab.trail': 'Jalur',
+      'tab.report': 'Lapor',
+      'tab.packing': 'Bawaan',
+      'tab.location': 'Lokasi',
+
+      // ── Trail tab ──
+      'trail.route': 'Jalur Cibodas ke Puncak Gede, {elev} m. {km} km dengan tanjakan {climb} m, sekitar {hours} jam naik.',
+      'trail.hours': '5 sampai 7',
+      'trail.saved': 'Panduan tersimpan, bisa dibuka tanpa sinyal',
+      'trail.offline': 'Offline. Laporan dari {time}',
+      'trail.section': 'Basecamp sampai puncak',
+      'trail.approx': 'Ketinggian, jarak dan waktu adalah angka panduan kasar untuk jalur Cibodas, bukan hasil pengukuran.',
+      'strip.status': 'Status jalur',
+      'profile.aria': 'Profil ketinggian dari basecamp ke puncak',
+      'profile.base': 'Basecamp {m} m',
+      'profile.summit': 'Puncak {m} m',
+      'strip.none': 'Tidak ada peringatan jalur dalam 24 jam terakhir',
+      'strip.none.sub': 'Melihat sesuatu? Tab Lapor cukup satu ketukan.',
+      'strip.open': 'Buka {name}',
+      'strip.at': 'di',
+      'strip.reported': 'Dilaporkan {ago}',
+      'reports.more.other': '{n} laporan lain dalam 24 jam terakhir',
+      'stops.noreports': 'Belum ada laporan dalam 24 jam',
+      'stops.more': ', dan {n} lainnya',
+      'stops.noreports.here': 'Belum ada laporan di sini dalam 24 jam terakhir.',
+      'stops.report.here': 'Lapor di sini',
+      'fac.water': 'Air',
+      'fac.camp': 'Kemah',
+      'who.you': 'Anda',
+      'unit.h': 'jam',
+      'unit.min': 'mnt',
+
+      // ── Report tab ──
+      'report.title': 'Laporkan kondisi jalur',
+      'report.sub': 'Ketuk yang Anda lihat. Laporan langsung terkirim, atau begitu ada sinyal.',
+      'report.where': 'Posisi Anda',
+      'report.section': 'Laporan terbaru, 24 jam terakhir',
+      'pick.closest': 'Titik terdekat dari lokasi terakhir Anda, {ago}',
+      'pick.near': 'Lokasi terakhir Anda paling dekat ke {name}',
+      'pick.last': 'Titik tempat Anda lapor terakhir kali',
+      'pick.base': 'Basecamp, tempat jalur dimulai',
+      'sent.title': '{cond} di {stop} sudah dilaporkan.',
+      'sent.waiting': 'Tersimpan di ponsel ini. Terkirim saat sinyal kembali.',
+      'sent.live': 'Pendaki lain melihatnya di jalur sekarang.',
+      'reports.empty': 'Belum ada laporan dalam 24 jam terakhir.',
+      'reports.empty.sub': 'Melihat sesuatu di jalur? Laporkan.',
+      'reports.updated': 'Diperbarui {time}.',
+      'reports.offline': 'Offline. Laporan dari {time}.',
+      'err.reports': 'Laporan hari ini tidak bisa dimuat.',
+      'err.still': 'Panduan, daftar bawaan dan lokasi tetap bisa dipakai.',
+      'retry': 'Coba lagi',
+      'act.photo': 'Tambah foto',
+      'act.note': 'Tambah catatan',
+      'undo': 'Batalkan',
+      'cancel': 'Batal',
+      'note.title': 'Tambah catatan',
+      'note.ph': 'mis. Talinya masih bagus, batunya basah',
+      'note.count': '{n} dari 200 karakter',
+      'note.save': 'Simpan catatan',
+      'menu.options': 'Opsi laporan',
+      'menu.remove': 'Hapus laporan',
+      'menu.flag': 'Tandai salah atau tidak pantas',
+      'photo.alt': 'Foto laporan',
+      'photo.open': 'Buka foto',
+
+      // ── Packing tab ──
+      'pack.title': 'Siapkan bawaan pendakian',
+      'pack.sub': 'Daftar tersusun sendiri dari lama pendakian dan jumlah rombongan, dan dari gunung ini.',
+      'pack.days': 'Hari di gunung',
+      'pack.people': 'Orang dalam rombongan',
+      'pack.days.fewer': 'Kurangi satu hari',
+      'pack.days.more': 'Tambah satu hari',
+      'pack.people.fewer': 'Kurangi satu orang',
+      'pack.people.more': 'Tambah satu orang',
+      'pack.reset': 'Mulai ulang',
+      'pack.count': '{done} dari {total} sudah dibawa',
+      'reset.title': 'Mulai ulang?',
+      'reset.msg': 'Ini menghapus semua tanda centang. Daftarnya tetap ada.',
+
+      // ── Location tab ──
+      'loc.title': 'Lokasi terakhir',
+      'loc.sub': 'Koordinat Anda, siap dikirim ke basecamp atau keluarga.',
+      'loc.update': 'Perbarui lokasi saya',
+      'loc.copy': 'Salin koordinat',
+      'loc.name': 'Nama Anda',
+      'loc.contact': 'Kontak basecamp',
+      'loc.name.ph': 'mis. Ayu',
+      'loc.contact.ph': 'mis. 0812 0000 0000',
+      'loc.optional': 'Keduanya opsional, tersimpan di ponsel ini saja. Setiap pesan membawa nomor darurat Indonesia, 112.',
+      'loc.msg.section': 'Pesan untuk dikirim',
+      'loc.share': 'Bagikan ke basecamp',
+      'loc.copymsg': 'Salin pesan',
+      'loc.hint': 'WhatsApp butuh data seluler. SMS cukup sinyal telepon. Tanpa sinyal sama sekali, bacakan koordinatnya lewat radio.',
+      'loc.near': 'Sekitar {d} m dari {name}, {elev} m',
+      'loc.far': 'Sekitar {km} km dari jalur',
+      'loc.within': ' (dalam {m} m)',
+      'loc.taken': ' · diambil pukul {time}',
+      'loc.auto': 'Diperbarui sendiri sekitar setiap 20 menit selama Mountain Trail terbuka.',
+      'loc.none': 'Belum ada lokasi. Ketuk Perbarui lokasi saya untuk mengambilnya.',
+      'loc.sending': 'Mengirim lokasi Anda…',
+      'loc.sent': 'Terkirim ke Mountain Trail pukul {time}. Tidak diperlihatkan ke pendaki lain.',
+      'loc.sendfail': 'Lokasi ini tidak bisa dikirim. Ketuk Perbarui lokasi saya untuk mencoba lagi.',
+      'loc.queued': 'Belum terkirim. Tersimpan di ponsel ini, terkirim saat sinyal kembali.',
+      'loc.perm': 'Izin lokasi dimatikan untuk Mountain Trail. Nyalakan di pengaturan Homeroom untuk aplikasi ini.',
+      'loc.nodevice': 'Perangkat ini tidak bisa membaca posisi.',
+      'loc.finding': 'Mencari posisi Anda…',
+      'loc.findfail': 'Posisi Anda tidak ditemukan. Coba lagi di tempat terbuka.',
+
+      // ── The message and the share queue ──
+      'msg.who': 'Ini {name} di Gede Pangrango (jalur Cibodas).',
+      'msg.hiker': 'seorang pendaki',
+      'msg.loc': 'Lokasi terakhir saya, {when}: {coords}{acc}, {near}.',
+      'msg.map': 'Peta: {url}',
+      'msg.noloc': 'Lokasi belum ditemukan.',
+      'msg.contact': 'Kontak Basecamp Cibodas: {contact}.',
+      'msg.emergency': 'Nomor darurat Indonesia: 112.',
+      'share.section': 'Menunggu sinyal',
+      'share.wa': 'Kirim lewat WhatsApp',
+      'share.sms': 'Kirim lewat SMS',
+      'share.back': 'Sinyal kembali',
+      'share.from': 'Pesan dari {when}',
+      'share.remove': 'Hapus',
+      'share.ready.other': '{n} pesan lokasi yang Anda simpan tanpa sinyal siap dikirim.',
+
+      // ── Times and toasts ──
+      'ago.now': 'baru saja',
+      'ago.min': '{n} mnt lalu',
+      'ago.hour': '{n} jam lalu',
+      'ago.day': 'lebih dari sehari lalu',
+      'toast.account': 'Buat akun Homeroom untuk melapor kondisi',
+      'toast.sendfail': 'Laporan itu tidak bisa dikirim. Coba lagi.',
+      'toast.removed': 'Laporan dihapus',
+      'toast.removefail': 'Laporan tidak bisa dihapus. Coba lagi.',
+      'toast.note': 'Catatan ditambahkan',
+      'toast.notefail': 'Catatan tidak bisa ditambahkan. Coba lagi.',
+      'toast.photo.offline': 'Foto butuh koneksi. Laporan tetap menyimpan catatannya.',
+      'toast.photo.na': 'Foto tidak tersedia di sini. Laporan tetap menyimpan catatannya.',
+      'toast.photo.pending': 'Foto dilampirkan. Terkirim bersama laporan.',
+      'toast.photo': 'Foto ditambahkan',
+      'toast.photofail': 'Foto tidak bisa dilampirkan. Coba lagi.',
+      'toast.photo.error': 'Foto tidak tersedia saat ini. Laporan tetap menyimpan catatannya.',
+      'toast.flagged': 'Ditandai. Tersembunyi untuk Anda.',
+      'toast.flagown': 'Anda tidak bisa menandai laporan sendiri',
+      'toast.flagfail': 'Laporan tidak bisa ditandai. Coba lagi.',
+      'toast.cleared': 'Daftar dikosongkan',
+      'toast.nosignal': 'Sinyal belum ada. Tetap di Menunggu sinyal.',
+      'toast.saved.offline': 'Tidak ada sinyal. Disimpan untuk dikirim saat online kembali.',
+      'toast.loc': 'Lokasi diperbarui',
+      'toast.queued': 'Ada pesan lokasi tersimpan menunggu dikirim. Lihat Lokasi.',
+      'toast.copied': 'Pesan tersalin',
+      'toast.coords': 'Koordinat tersalin',
+      'toast.copyfail': 'Tidak bisa menyalin. Pilih teks pesan sendiri.',
+
+      // ── Conditions ──
+      'cond.slippery.label': 'Licin',
+      'cond.slippery.hint': 'Batu basah atau lumpur',
+      'cond.no-water.label': 'Tidak ada air',
+      'cond.no-water.hint': 'Sumber air kering atau hampir tidak mengalir',
+      'cond.heavy-fog.label': 'Kabut tebal',
+      'cond.heavy-fog.hint': 'Penanda berikutnya tidak terlihat',
+      'cond.landslide.label': 'Longsor',
+      'cond.landslide.hint': 'Jalur tertimbun atau putus',
+
+      // ── Stops ──
+      'stop.cibodas.short': 'Daftar dan tunjukkan SIMAKSI',
+      'stop.cibodas.detail': 'Gerbang taman nasional. Daftar, tunjukkan izin SIMAKSI dan bayar di sini. Porter dan pemandu bisa diatur di pintu masuk, dan toko serta sinyal terakhir ada di seberang jalan.',
+      'stop.telaga-biru.short': 'Danau biru di samping jalur',
+      'stop.telaga-biru.detail': 'Danau biru kecil sedikit naik dari gerbang, dengan sebuah shelter dan tempat memandang ke atas danau. Hutan di sini lebat dengan lumut dan pakis pohon.',
+      'stop.rawa-gayonggong.short': 'Jalan papan di atas rawa',
+      'stop.rawa-gayonggong.detail': 'Penyeberangan rawa di atas jalan papan. Papannya tetap basah dan berlumut: jalan di tengah, bukan di tepi.',
+      'stop.panyancangan.short': 'Shelter, jalur samping ke air terjun Cibeureum',
+      'stop.panyancangan.detail': 'Shelter istirahat di kaki tanjakan panjang. Jalur samping turun ke air terjun Cibeureum. Dari sini jalur menjadi curam selama kira-kira satu setengah jam.',
+      'stop.air-panas.short': 'Penyeberangan sungai hangat, pegang tali',
+      'stop.air-panas.detail': 'Mata air panas yang melintasi jalur, dengan tali tetap untuk dipegang. Batu di sekitar penyeberangan licin: uapnya mengaburkan kacamata dan lampu kepala.',
+      'stop.kandang-batu.short': 'Shelter dan mata air',
+      'stop.kandang-batu.detail': 'Shelter batu dan mata air yang andal, pengisian pertama yang bisa diandalkan di atas gerbang. Tempat kemah yang tenang untuk bermalam jika kemah utama di bawah puncak penuh.',
+      'stop.kandang-badak.short': 'Kemah utama, jalur ke Pangrango',
+      'stop.kandang-badak.detail': 'Area kemah utama, dengan mata air dan tempat untuk tenda. Jalur samping ke Gunung Pangrango berangkat dari sini. Malam turun mendekati 5 °C.',
+      'stop.tanjakan-setan.short': 'Batu curam dengan tali',
+      'stop.tanjakan-setan.detail': '"Tanjakan setan": tangga batu curam dengan tali tetap. Jalannya lambat, dan batu yang terbuka retak saat hujan deras.',
+      'stop.puncak-gede.short': 'Bibir kawah, tanpa air, tanpa kemah',
+      'stop.puncak-gede.detail': 'Bibir kawah puncak di 2.958 m, dengan kawah belerang kuning di bawahnya. Tidak ada air dan tidak boleh berkemah. Kabut menutup cepat dari akhir pagi.',
+
+      // ── Packing groups ──
+      'pack.group.shared': 'Milik rombongan',
+      'pack.group.each': 'Per orang',
+      'pack.group.food': 'Makanan dan air',
+
+      // ── Packing items ──
+      'pack.permit.label': 'Izin pendakian (SIMAKSI)',
+      'pack.permit.note': 'Dipesan lebih dulu; salinan ID untuk setiap orang',
+      'pack.tent.label': 'Tenda untuk 2',
+      'pack.tent.note': 'Malam mendekati 5 °C di atas 2.000 m',
+      'pack.stove.label': 'Kompor dan set panci',
+      'pack.stove.note': 'Satu orang memasak untuk rombongan',
+      'pack.gas.label': 'Tabung gas',
+      'pack.gas.note': 'Untuk memasak dan minuman hangat',
+      'pack.first-aid.label': 'Kotak P3K',
+      'pack.first-aid.note': 'Setidaknya plester lecet dan obat pereda nyeri',
+      'pack.tablets.label': 'Tablet pemurni air',
+      'pack.tablets.note': 'Air mata air perlu diolah',
+      'pack.rubbish.label': 'Kantong sampah',
+      'pack.rubbish.note': 'Semua sampah dibawa turun',
+      'pack.rain-jacket.label': 'Jaket hujan',
+      'pack.rain-jacket.note': 'Hujan hampir setiap sore',
+      'pack.warm-jacket.label': 'Jaket hangat',
+      'pack.warm-jacket.note': 'Malam mendekati 5 °C',
+      'pack.gloves.label': 'Sarung tangan dan kupluk',
+      'pack.gloves.note': 'Dingin di bibir kawah',
+      'pack.headlamp.label': 'Headlamp dan baterai cadangan',
+      'pack.headlamp.note': 'Naik puncak mulai sebelum fajar',
+      'pack.shoes.label': 'Sepatu dengan cengkraman yang baik',
+      'pack.shoes.note': 'Batu basah dan akar',
+      'pack.whistle.label': 'Peluit',
+      'pack.whistle.note': 'Tiga bunyi untuk minta tolong',
+      'pack.power-bank.label': 'Power bank',
+      'pack.power-bank.note': 'Tidak ada pengisian daya di gunung',
+      'pack.medicines.label': 'Obat pribadi',
+      'pack.medicines.note': 'Resep sendiri dan perawatan lecet',
+      'pack.sleeping-bag.label': 'Sleeping bag (5 °C)',
+      'pack.sleeping-bag.note': 'Malam mendekati 5 °C',
+      'pack.sleeping-mat.label': 'Matras tidur',
+      'pack.sleeping-mat.note': 'Tanahnya dingin dan lembap',
+      'pack.dry-clothes.label': 'Baju kering dalam kantong plastik',
+      'pack.dry-clothes.note': 'Lapisan kering untuk kemah',
+      'pack.water.label': 'Air',
+      'pack.water.note': '2 L per orang; isi ulang di Kandang Batu dan Kandang Badak',
+      'pack.meals.label': 'Makanan',
+      'pack.meals.note': 'Tiga kali sehari, dikurangi sarapan pertama dan makan malam terakhir',
+      'pack.snacks.label': 'Makanan ringan jalur',
+      'pack.snacks.note': 'Dua kali sehari selama berjalan',
+      'pack.spare-meal.label': 'Makanan cadangan',
+      'pack.spare-meal.note': 'Satu tambahan per orang, untuk malam yang dingin',
+    },
+  };
+
+  function normalizeLang(v) { return v === 'id' ? 'id' : 'en'; }
+
+  function t(lang, key, vars) {
+    var d = STRINGS[lang] || STRINGS.en;
+    var s = d[key];
+    if (s === undefined) s = STRINGS.en[key];
+    if (s === undefined) return key;
+    if (vars) {
+      for (var k in vars) s = s.split('{' + k + '}').join(String(vars[k]));
+    }
+    return s;
+  }
+
+  // Plurals: English has .one/.other, Indonesian only .other. n is always
+  // available as a {n} placeholder.
+  function tn(lang, key, n, vars) {
+    var v = Object.assign({}, vars, { n: n });
+    var d = STRINGS[lang] || STRINGS.en;
+    var k = (n === 1 && d[key + '.one'] !== undefined) ? key + '.one' : key + '.other';
+    return t(lang, k, v);
+  }
+
+  // For strings whose English source lives in the data files: English
+  // returns the given source text as is; Indonesian looks the key up and
+  // falls back to the English source, never to an empty string.
+  function tx(lang, key, english) {
+    if (lang !== 'id') return english;
+    var s = STRINGS.id[key];
+    return s === undefined ? english : s;
+  }
+
+  // Same buckets as trail-data.formatAgo, in the chosen language.
+  function ago(lang, ms) {
+    if (typeof ms !== 'number' || !isFinite(ms) || ms < 0) ms = 0;
+    var min = Math.floor(ms / 60000);
+    if (min < 1) return t(lang, 'ago.now');
+    if (min < 60) return t(lang, 'ago.min', { n: min });
+    var h = Math.floor(min / 60);
+    if (h < 24) return t(lang, 'ago.hour', { n: h });
+    return t(lang, 'ago.day');
+  }
+
+  function groupDigits(intStr, sep) {
+    var s = intStr;
+    var out = '';
+    while (s.length > 3) {
+      out = sep + s.slice(-3) + out;
+      s = s.slice(0, -3);
+    }
+    return s + out;
+  }
+
+  function fmtNum(lang, n) {
+    var s = String(n);
+    var neg = s.charAt(0) === '-';
+    if (neg) s = s.slice(1);
+    var intPart = s, frac = '';
+    var dot = s.indexOf('.');
+    if (dot >= 0) { intPart = s.slice(0, dot); frac = s.slice(dot + 1); }
+    var out = groupDigits(intPart, lang === 'id' ? '.' : ',');
+    if (frac) out += (lang === 'id' ? ',' : '.') + frac;
+    return (neg ? '-' : '') + out;
+  }
+
+  function fmtKm(lang, km) {
+    if (km % 1 === 0) return String(km);
+    var s = km.toFixed(1);
+    return lang === 'id' ? s.replace('.', ',') : s;
+  }
+
+  function months(lang) { return lang === 'id' ? ID_MONTHS : EN_MONTHS; }
+
+  return {
+    LANGS: LANGS,
+    STRINGS: STRINGS,
+    normalizeLang: normalizeLang,
+    t: t,
+    tn: tn,
+    tx: tx,
+    ago: ago,
+    fmtNum: fmtNum,
+    fmtKm: fmtKm,
+    months: months,
+  };
+});

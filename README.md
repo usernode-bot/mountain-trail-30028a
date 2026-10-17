@@ -20,6 +20,13 @@ Gede Pangrango by the Cibodas route. Four tabs along the bottom:
   ready to share with basecamp or family (the device's share sheet, or copy).
   Every message carries Indonesia's emergency number, 112.
 
+## Language
+
+The app reads in English or Bahasa Indonesia; the choice sits on the
+Location tab and is kept on the phone (`mt:lang`, never sent anywhere).
+Trail stop names stay as they are; conditions and every other string are
+translated in `public/i18n.js`.
+
 ## Offline
 
 The guide is static content that ships with the app (`public/trail-data.js`),
