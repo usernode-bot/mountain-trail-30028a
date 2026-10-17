@@ -153,6 +153,18 @@
   .status-strip-skeleton {
     @apply pointer-events-none;
   }
+  /* The banner's title button (the keyboard target for opening the stop)
+     and the photo square at its right. The strip's text column is
+     min-w-0 flex-1, so a long name wraps and the photo stays at the right. */
+  .status-strip-open {
+    @apply block w-full rounded-md text-left text-body font-medium
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus;
+  }
+  .status-strip-photo {
+    @apply relative flex h-11 w-11 flex-none items-center justify-center overflow-hidden rounded-lg bg-raised text-muted
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus;
+  }
+  .status-strip-photo img { @apply absolute inset-0 h-full w-full object-cover; }
 
   /* The trail line, the app's signature: a dashed rail the way trails are
      drawn on a map, with a round node per stop carrying its kind's icon,

@@ -44,3 +44,13 @@ test('the guide names the mountain and its four conditions', () => {
     ['heavy-fog', 'landslide', 'no-water', 'slippery']
   );
 });
+
+test('formatConfirms words the count and is blank for none', () => {
+  assert.equal(T.formatConfirms(0), '');
+  assert.equal(T.formatConfirms(-1), '');
+  assert.equal(T.formatConfirms(undefined), '');
+  assert.equal(T.formatConfirms('3'), '');
+  assert.equal(T.formatConfirms(1), "1 hiker says it's still there.");
+  assert.equal(T.formatConfirms(3), "3 hikers say it's still there.");
+  assert.equal(T.formatConfirms(24), "24 hikers say it's still there.");
+});
