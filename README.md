@@ -2,7 +2,7 @@
 
 An offline trail guide and safety companion for hikers, built around Mount
 Gede Pangrango by the Cibodas route. The whole interface speaks Indonesian
-and English; a pill in the header switches language. Four tabs along the
+and English; the Location tab switches language. Four tabs along the
 bottom:
 
 - **Trail** — the guide: the mountain header, the trail's current status
@@ -19,7 +19,7 @@ bottom:
   Extreme weather or Fallen tree sends a condition report, with an optional
   note (200 characters) and photo. Reports are shared with every hiker and
   show for 24 hours; a "Still valid" tap from another hiker confirms the
-  report and pushes that window out again. Made offline, they wait on the
+  report (the count shows; it does not extend the 24 hours). Made offline, they wait on the
   phone and send when the signal is back. A report flagged by two people is
   hidden; authors can remove their own.
 - **Packing** — a checklist that builds itself from the days on the mountain
@@ -33,6 +33,13 @@ The trail status, permits and weather figures are curated with the app's
 releases (`public/trail-data.js`): the platform offers no live source, so
 each block says how old it is and shows "not verified" until a person has
 confirmed it against the park's official pages.
+
+## Language
+
+The app reads in English or Bahasa Indonesia; the choice sits on the
+Location tab and is kept on the phone (`mt:lang`, never sent anywhere).
+Trail stop names stay as they are; conditions and every other string are
+translated in `public/i18n.js`.
 
 ## Offline
 

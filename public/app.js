@@ -18,6 +18,7 @@
   var MOUNTAIN = M.MOUNTAIN;
   var STOPS = M.STOPS;
   var STOP_BY_ID = M.STOP_BY_ID;
+  var MIN_FROM_BASECAMP = M.MIN_FROM_BASECAMP;
   var COND_BY_ID = M.COND_BY_ID;
 
   // ── Small helpers ──────────────────────────────────────────────────────
@@ -27,55 +28,8 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
-
-  // ── Language: the hiker's own choice, then the platform locale, then the
-  //    device, then English. One LANG for the whole app; rerenderAll()
-  //    re-renders every screen when it changes. ───────────────────────────
-  var LANG = 'en';
-  function t(key, vars) { return I18N.t(LANG, key, vars); }
-  function fmtNum(n) { return Number(n).toLocaleString(LANG === 'id' ? 'id-ID' : 'en-US'); }
-  function fmtM(n) { return fmtNum(n); }
-  function fmtAgo(ms) {
-    if (typeof ms !== 'number' || !isFinite(ms) || ms < 0) ms = 0;
-    var min = Math.floor(ms / 60000);
-    if (min < 1) return t('ago.now');
-    if (min < 60) return t('ago.min', { n: min });
-    var h = Math.floor(min / 60);
-    if (h < 24) return h === 1 ? t('ago.hourOne') : t('ago.hourMany', { n: h });
-    return t('ago.overDay');
-  }
-  var MONTHS = {
-    en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-    id: ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'],
-  };
-  // "14:28, 10 Oct" — hour and minute are the ride leader's clock, the day
-  // name follows the chosen language.
-  function fmtWhen(iso) {
-    var d = new Date(iso);
-    if (!isFinite(d.getTime())) return '';
-    var h = d.getHours(), m = d.getMinutes();
-    return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m + ', ' + d.getDate() + ' ' + MONTHS[LANG][d.getMonth()];
-  }
-  function condLabel(id) {
-    if (I18N.has(LANG, 'cond.' + id)) return t('cond.' + id);
-    return COND_BY_ID[id] ? COND_BY_ID[id].label : id;
-  }
-  function levelLabel(level) { return t('banner.' + level); }
-  // Fills every [data-i18n] span, [data-i18n-ph] placeholder and
-  // [data-i18n-aria] label in the static HTML.
-  function applyI18n() {
-    document.documentElement.lang = LANG;
-    Array.prototype.forEach.call(document.querySelectorAll('[data-i18n]'), function (el) {
-      el.textContent = t(el.getAttribute('data-i18n'));
-    });
-    Array.prototype.forEach.call(document.querySelectorAll('[data-i18n-ph]'), function (el) {
-      el.setAttribute('placeholder', t(el.getAttribute('data-i18n-ph')));
-    });
-    Array.prototype.forEach.call(document.querySelectorAll('[data-i18n-aria]'), function (el) {
-      el.setAttribute('aria-label', t(el.getAttribute('data-i18n-aria')));
-    });
-  }
-  function fmtKm(km) { return km % 1 === 0 ? String(km) : km.toFixed(1); }
+  function fmtM(n) { return I18N.fmtNum(LANG, n); }
+  function fmtKm(km) { return I18N.fmtKm(LANG, km); }
   function uuid() {
     if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
     return 'r-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
@@ -125,6 +79,18 @@
   }
 
   // ── Token, demo mode and storage ───────────────────────────────────────
+  // The language is read straight from mt:lang (never through lsGet: the
+  // first render happens before /api/me says whether this is the demo, and
+  // the language is the same setting in the demo and outside it).
+  var LANG = 'en';
+  try { LANG = I18N.normalizeLang(localStorage.getItem('mt:lang')); } catch (e) {}
+  function t(key, vars) { return I18N.t(LANG, key, vars); }
+  function tn(key, n, vars) { return I18N.tn(LANG, key, n, vars); }
+  function tx(key, english) { return I18N.tx(LANG, key, english); }
+  function fmtNum(n) { return I18N.fmtNum(LANG, n); }
+  function fmtAgo(ms) { return I18N.ago(LANG, ms); }
+  function condLabel(id) { return COND_BY_ID[id] ? tx('cond.' + id + '.label', COND_BY_ID[id].label) : id; }
+  function levelLabel(level) { return t('banner.' + level); }
   var TOKEN = '';
   var PAGE_DEMO = /[?&]demo=1/.test(location.search);
   try { TOKEN = new URLSearchParams(location.search).get('token') || ''; } catch (e) {}
@@ -166,6 +132,11 @@
   var failed = false;
   var usingCache = null;   // { at, now, reports } when offline
   var swReady = false;
+  // A page loaded by an already-registered service worker (every visit after
+  // the first) knows the shell is cached at once, so the "Guide saved for
+  // offline use" line is up from the first frame and the header holds still
+  // while reports load.
+  if (navigator.serviceWorker && navigator.serviceWorker.controller) swReady = true;
   var expandedStop = null;
   var lastAction = null;   // the entry behind the sent note
 
@@ -182,8 +153,10 @@
         var copy = Object.assign({}, r);
         if ('note' in o) copy.note = o.note;
         if ('photoUrl' in o) copy.photoUrl = o.photoUrl;
-        if ('confirmedByMe' in o) copy.confirmedByMe = o.confirmedByMe;
-        if ('confirmCount' in o) copy.confirmCount = o.confirmCount;
+        if (o.confirmed && !r.confirmedByMe) {
+          copy.confirmedByMe = true;
+          copy.confirms = (r.confirms || 0) + 1;
+        }
         return copy;
       });
     }
@@ -300,7 +273,60 @@
         return;
       }
     } catch (e) {}
-    kitToast(t('account.fallback'));
+    kitToast(t('toast.account'));
+  }
+
+  // ── Language ───────────────────────────────────────────────────────────
+  // Every static string in index.html carries its English text and a key;
+  // this walks them and applies the chosen language. English stays in the
+  // markup, so a missing script still reads.
+  function applyStaticText() {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-i18n]'), function (el) {
+      el.textContent = t(el.getAttribute('data-i18n'));
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-i18n-label]'), function (el) {
+      el.setAttribute('aria-label', t(el.getAttribute('data-i18n-label')));
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-i18n-placeholder]'), function (el) {
+      el.setAttribute('placeholder', t(el.getAttribute('data-i18n-placeholder')));
+    });
+    document.documentElement.lang = LANG;
+  }
+  var LANG_TEXT = { en: 'English', id: 'Bahasa Indonesia' };
+  function renderLangButtons() {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-lang]'), function (btn) {
+      var on = btn.getAttribute('data-lang') === LANG;
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      btn.innerHTML = on ? iconSvg('check', 'h-4 w-4') + esc(LANG_TEXT[btn.getAttribute('data-lang')]) : esc(LANG_TEXT[btn.getAttribute('data-lang')]);
+    });
+  }
+  function setLang(v) {
+    LANG = I18N.normalizeLang(v);
+    try { localStorage.setItem('mt:lang', LANG); } catch (e) {}
+    rerenderAll();
+  }
+  function wireLang() {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-lang]'), function (btn) {
+      btn.addEventListener('click', function () { setLang(btn.getAttribute('data-lang')); });
+    });
+  }
+  // The whole app switches at once, no reload. A sheet already open keeps
+  // the language it opened with; everything re-rendered uses the new one.
+  function rerenderAll() {
+    applyStaticText();
+    renderLangButtons();
+    renderHeader();
+    renderReportsAndTrail();
+    renderPermits();
+    renderWeather();
+    renderNotifs();
+    if (picker) { buildPicker(); renderPickerHint(); }
+    if (packing) renderPacking();
+    renderLocation();
+    renderShareQueue();
+    if (lastAction) showSentNote(lastAction);
+    var status = $('loc-status');
+    if (status) status.textContent = '';
   }
 
   // ── Tabs ───────────────────────────────────────────────────────────────
@@ -329,13 +355,19 @@
 
   // ── Trail tab ──────────────────────────────────────────────────────────
   function renderHeader() {
+    $('mtn-route').textContent = t('trail.route', {
+      elev: fmtM(MOUNTAIN.summitM),
+      km: fmtKm(MOUNTAIN.lengthKm),
+      climb: fmtM(MOUNTAIN.climbM),
+      hours: t('trail.hours'),
+    });
     var line = $('offline-line');
     if (!navigator.onLine && usingCache) {
       line.hidden = false;
-      line.innerHTML = iconSvg('clock', 'h-4 w-4') + ' ' + esc(t('offline.cache', { time: fmtClock(usingCache.at) }));
+      line.innerHTML = iconSvg('clock', 'h-4 w-4') + ' ' + esc(t('trail.offline', { time: fmtClock(usingCache.at) }));
     } else if (swReady) {
       line.hidden = false;
-      line.innerHTML = '<span class="text-accent">' + iconSvg('check', 'h-4 w-4') + '</span> ' + esc(t('offline.saved'));
+      line.innerHTML = '<span class="text-accent">' + iconSvg('check', 'h-4 w-4') + '</span> ' + esc(t('trail.saved'));
     } else {
       line.hidden = true;
       line.textContent = '';
@@ -346,17 +378,6 @@
     if (!isFinite(d.getTime())) return '';
     var h = d.getHours(), m = d.getMinutes();
     return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
-  }
-  // The route line under the mountain's name, translated on every rerender.
-  function renderRouteLine() {
-    var el = $('mtn-route');
-    if (!el) return;
-    el.textContent = t('route.line', {
-      summit: fmtM(MOUNTAIN.summitM),
-      km: fmtNum(MOUNTAIN.lengthKm),
-      climb: fmtM(MOUNTAIN.climbM),
-      hours: t('route.hours', { min: MOUNTAIN.hoursUpMin, max: MOUNTAIN.hoursUpMax }),
-    });
   }
 
   // The official level the banner shows. In the staging demo a client-side
@@ -574,7 +595,8 @@
 
     function renderStatus() {
     var el = $('status-strip');
-    el.className = 'status-strip mt-2.5';
+    el.className = 'status-strip mt-4';
+    el.onclick = null;
     if (loading) {
       el.classList.add('status-strip-skeleton');
       el.removeAttribute('role');
@@ -584,17 +606,17 @@
       return;
     }
     if (failed) {
-      el.innerHTML = '<div class="flex-1"><p class="text-body">' + esc(t('status.loadFail')) + '</p>' +
-        '<p class="text-small text-muted">' + esc(t('status.loadFailSub')) + '</p></div>' +
-        '<button type="button" id="status-retry" class="btn-secondary self-center">' + esc(t('status.retry')) + '</button>';
+      el.innerHTML = '<div class="flex-1"><p class="text-body">' + esc(t('err.reports')) + '</p>' +
+        '<p class="text-small text-muted">' + esc(t('err.still')) + '</p></div>' +
+        '<button type="button" id="status-retry" class="btn-secondary self-center">' + esc(t('retry')) + '</button>';
       $('status-retry').addEventListener('click', function () { loadReports(); });
       return;
     }
     var list = visibleReports();
     if (!list.length) {
       el.innerHTML = iconSvg('check', 'status-strip-icon') +
-        '<div><p class="text-body font-medium">' + esc(t('status.noneTitle')) + '</p>' +
-        '<p class="text-small text-muted">' + esc(t('status.noneSub')) + '</p></div>';
+        '<div><p class="text-body font-medium">' + esc(t('strip.none')) + '</p>' +
+        '<p class="text-small text-muted">' + esc(t('strip.none.sub')) + '</p></div>';
       el.removeAttribute('role');
       return;
     }
@@ -610,21 +632,65 @@
     var cond = COND_BY_ID[worst.condition];
     el.classList.add(cond.tone === 'danger' ? 'status-strip-danger' : 'status-strip-warn');
     var others = list.length - 1;
-    el.setAttribute('role', 'button');
-    el.setAttribute('tabindex', '0');
-    el.setAttribute('aria-label', t('status.openStop', { stop: STOP_BY_ID[worst.stopId].name }));
-    el.innerHTML = iconSvg(worst.condition, 'status-strip-icon') +
-      '<div><p class="text-body font-medium">' + esc(condLabel(worst.condition)) + ' ' + esc(t('status.at')) + ' ' + esc(STOP_BY_ID[worst.stopId].name) + '</p>' +
-      '<p class="text-small text-muted">' + esc(t('status.reported', { ago: fmtAgo(nowDate().getTime() - new Date(worst.createdAt).getTime()) })) +
-      (others > 0 ? esc(others === 1 ? t('status.moreOne') : t('status.moreMany', { n: others })) : '.') + '</p></div>';
+    // The strip is no longer one button: it holds a confirm button and
+    // maybe a photo, which must not sit inside a clickable role. The title
+    // button is the keyboard target; pointer taps anywhere else still open
+    // the stop.
+    el.removeAttribute('role');
+    el.removeAttribute('tabindex');
+    el.removeAttribute('aria-label');
+    var confirmBtn = '';
+    if (!worst.mine && !worst.pending) {
+      confirmBtn = '<button type="button" class="btn-secondary mt-2" data-confirm' +
+        (worst.confirmedByMe
+          ? ' aria-pressed="true" aria-disabled="true">' + iconSvg('check', 'h-5 w-5 text-accent') + 'Masih berlaku</button>'
+          : '>Masih berlaku</button>');
+    }
+    el.innerHTML = iconSvg(worst.condition === 'landslide' ? 'landslide' : worst.condition, 'status-strip-icon') +
+      '<div class="min-w-0 flex-1">' +
+      '<button type="button" class="status-strip-open" aria-label="' + esc(t('strip.open', { name: STOP_BY_ID[worst.stopId].name })) + '">' +
+      '<span class="text-body font-medium">' + esc(tx('cond.' + cond.id + '.label', cond.label)) + ' ' + esc(t('strip.at')) + ' ' + esc(STOP_BY_ID[worst.stopId].name) + '</span></button>' +
+      '<p class="text-small text-muted">' + esc(t('strip.reported', { ago: I18N.ago(LANG, nowDate().getTime() - new Date(worst.createdAt).getTime()) })) +
+      (others > 0 ? '. ' + esc(tn('reports.more', others)) : '') + '.</p>' +
+      (worst.confirms > 0 ? '<p class="text-small text-muted">' + esc(M.formatConfirms(worst.confirms)) + '</p>' : '') +
+      confirmBtn + '</div>' +
+      (worst.photoUrl
+        ? '<button type="button" class="status-strip-photo" data-photo="' + esc(worst.photoUrl) + '" aria-label="Open the photo">' +
+          iconSvg('photo', 'h-6 w-6') + '<img alt="" src="' + esc(worst.photoUrl) + '"></button>'
+        : '');
     function openWorst() {
       expandedStop = worst.stopId;
       renderStops();
       var row = document.getElementById('stop-' + worst.stopId);
       if (row) row.scrollIntoView({ block: 'start', behavior: 'smooth' });
     }
-    el.onclick = openWorst;
-    el.onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openWorst(); } };
+    el.onclick = function (e) {
+      if (e.target.closest('[data-confirm], [data-photo]')) return;
+      openWorst();
+    };
+    var photoBtn = el.querySelector('[data-photo]');
+    if (photoBtn) {
+      photoBtn.addEventListener('click', function () { showPhoto(photoBtn.getAttribute('data-photo')); });
+      var pimg = photoBtn.querySelector('img');
+      // Offline the photo cannot load; the drawn icon behind it shows.
+      if (pimg) pimg.addEventListener('error', function () { pimg.hidden = true; });
+    }
+    var cBtn = el.querySelector('[data-confirm]');
+    if (cBtn && !worst.confirmedByMe) cBtn.addEventListener('click', function () { confirmReport(worst); });
+  }
+
+  // The stop picked on the height profile (module state, so the pick and
+  // its ring survive a report reload), or null for the default two ends.
+  var profileStop = null;
+
+  function pickProfileStop(id, fromChart) {
+    profileStop = profileStop === id ? null : id;
+    renderProfile();
+    // A tap on the chart may land on a chip that is scrolled out of view.
+    if (profileStop && fromChart) {
+      var chip = document.querySelector('[data-profile-stop="' + profileStop + '"]');
+      if (chip) chip.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
   }
 
   function renderProfile() {
@@ -645,11 +711,56 @@
       var r = tone ? 4.5 : 4;
       return '<circle class="' + cls + '" cx="' + px(s.km).toFixed(1) + '" cy="' + py(s.elevM).toFixed(1) + '" r="' + r + '"/>';
     }).join('');
-    $('profile').innerHTML =
+    var ring = '';
+    var picked = profileStop && STOP_BY_ID[profileStop] ? STOP_BY_ID[profileStop] : null;
+    if (picked) {
+      ring = '<circle class="profile-selected" cx="' + px(picked.km).toFixed(1) + '" cy="' + py(picked.elevM).toFixed(1) + '" r="7.5"/>';
+    }
+    var box = $('profile');
+    box.innerHTML =
       '<svg viewBox="0 0 358 80" class="block w-full" role="img" aria-label="' + esc(t('profile.aria')) + '">' +
       '<line x1="0" y1="77" x2="358" y2="77" style="stroke:rgb(var(--line));stroke-width:1"/>' +
-      '<polyline class="profile-line" points="' + pts + '"/>' + dots + '</svg>';
-    $('profile-ends').innerHTML = '<span>' + esc(t('profile.basecamp', { m: fmtM(STOPS[0].elevM) })) + '</span><span>' + esc(t('profile.summit', { m: fmtM(eMax) })) + '</span>';
+      '<polyline class="profile-line" points="' + pts + '"/>' + dots + ring + '</svg>';
+    // Tapping the chart picks the stop whose dot is nearest left or right
+    // of the tap, so the closely spaced dots stay easy to hit.
+    box.onclick = function (e) {
+      var rect = box.getBoundingClientRect();
+      var vx = ((e.clientX - rect.left) / rect.width) * W;
+      var best = null, bestD = Infinity;
+      STOPS.forEach(function (s) {
+        var d = Math.abs(px(s.km) - vx);
+        if (d < bestD) { bestD = d; best = s.id; }
+      });
+      if (best) pickProfileStop(best, true);
+    };
+    var ends = $('profile-ends');
+    if (picked) {
+      ends.innerHTML =
+        '<p><span class="font-semibold text-fg">' + esc(picked.name) + '</span>, km ' + fmtKm(picked.km) +
+        ', ' + fmtM(picked.elevM) + ' m. ' +
+        (picked.id === STOPS[0].id ? 'Where the walk starts.' : 'About ' + fmtDur(MIN_FROM_BASECAMP[picked.id]) + ' from basecamp.') +
+        '</p>';
+    } else {
+      ends.innerHTML = '<span>' + esc(t('profile.base', { m: fmtM(STOPS[0].elevM) })) + '</span><span>' + esc(t('profile.summit', { m: fmtM(eMax) })) + '</span>';
+    }
+    // One chip per stop, in trail order: the labels the chart is too small
+    // to carry, and the keyboard and screen-reader path to the profile.
+    var row = $('profile-stops');
+    row.innerHTML = STOPS.map(function (s) {
+      var on = profileStop === s.id;
+      var meta = s.id === STOPS[0].id
+        ? 'km 0, start'
+        : 'km ' + fmtKm(s.km) + ', ' + fmtDur(MIN_FROM_BASECAMP[s.id]);
+      return '<li><button type="button" class="profile-stop' + (on ? ' profile-stop-selected' : '') +
+        '" data-profile-stop="' + s.id + '" aria-pressed="' + (on ? 'true' : 'false') + '">' +
+        '<span class="profile-stop-name">' + esc(s.name) + '</span>' +
+        '<span class="profile-stop-meta">' + meta + '</span></button></li>';
+    }).join('');
+    Array.prototype.forEach.call(row.querySelectorAll('[data-profile-stop]'), function (btn) {
+      btn.addEventListener('click', function () {
+        pickProfileStop(btn.getAttribute('data-profile-stop'), false);
+      });
+    });
   }
 
   function condLineHtml(stop) {
@@ -658,14 +769,14 @@
       return '<p class="cond-line cond-line-none"><i></i><span class="skeleton h-3.5 w-32"></span></p>';
     }
     if (!reps.length) {
-      return '<p class="cond-line cond-line-none"><i></i>' + esc(t('stops.none')) + '</p>';
+      return '<p class="cond-line cond-line-none"><i></i>' + esc(t('stops.noreports')) + '</p>';
     }
     var rep = reps[0];
     var c = COND_BY_ID[rep.condition];
-    var extra = reps.length > 1 ? esc(t('cond.more', { n: reps.length - 1 })) : '';
-    var waiting = rep.pending && rep.waiting ? esc(t('cond.waiting')) : '';
+    var extra = reps.length > 1 ? t('stops.more', { n: reps.length - 1 }) : '';
+    var waiting = rep.pending && rep.waiting ? ' · ' + t('share.section') : '';
     return '<p class="cond-line cond-line-' + (c.tone === 'danger' ? 'danger' : 'warn') + '"><i></i>' +
-      esc(condLabel(rep.condition)) + ', ' + esc(fmtAgo(nowDate().getTime() - new Date(rep.createdAt).getTime())) + extra + waiting + '</p>';
+      esc(tx('cond.' + c.id + '.label', c.label)) + ', ' + esc(I18N.ago(LANG, nowDate().getTime() - new Date(rep.createdAt).getTime())) + esc(extra) + esc(waiting) + '</p>';
   }
 
   function stopTone(stop) {
@@ -691,8 +802,7 @@
         '<span class="stop-node' + stopTone(s) + '">' + iconSvg(stopIcon(s), 'h-5 w-5') + '</span>' +
         '<div class="stop-body">' +
         '<p class="text-body font-semibold">' + esc(s.name) + '</p>' +
-        '<p class="mt-1 text-small text-muted">' + fmtM(s.elevM) + ' m, km ' + fmtKm(s.km) + '. ' +
-        esc(I18N.has(LANG, 'stop.' + s.id) ? t('stop.' + s.id) : s.short) + '</p>' +
+        '<p class="mt-1 text-small text-muted">' + fmtM(s.elevM) + ' m, km ' + fmtKm(s.km) + '. ' + esc(tx('stop.' + s.id + '.short', s.short)) + '</p>' +
         (facs ? '<p class="fac">' + facs + '</p>' : '') +
         condLineHtml(s) +
         (open ? expandedHtml(s) : '') +
@@ -730,22 +840,24 @@
     var rows = reps.map(function (r) {
       var c = COND_BY_ID[r.condition];
       return '<li class="list-row items-start">' +
-        '<span class="report-icon report-icon-' + (c.tone === 'danger' ? 'danger' : 'warn') + '">' + iconSvg(r.condition, 'h-4 w-4') + '</span>' +
-        '<div class="min-w-0 flex-1"><p class="text-body font-medium">' + esc(condLabel(r.condition)) + '</p>' +
-        '<p class="text-small text-muted">' + (r.mine ? esc(t('who.you')) : esc(r.username)) + ', ' + esc(fmtAgo(nowDate().getTime() - new Date(r.createdAt).getTime())) + '</p>' +
+        '<span class="report-icon report-icon-' + (c.tone === 'danger' ? 'danger' : 'warn') + '">' + iconSvg(r.condition === 'landslide' ? 'landslide' : r.condition, 'h-4 w-4') + '</span>' +
+        '<div class="min-w-0 flex-1"><p class="text-body font-medium">' + esc(tx('cond.' + c.id + '.label', c.label)) + '</p>' +
+        '<p class="text-small text-muted">' + (r.mine ? esc(t('who.you')) : esc(r.username)) + ', ' + esc(I18N.ago(LANG, nowDate().getTime() - new Date(r.createdAt).getTime())) + '</p>' +
+        (r.confirms > 0 ? '<p class="text-small text-muted">' + esc(M.formatConfirms(r.confirms)) + '</p>' : '') +
         (r.note ? '<p class="mt-0.5 text-small">' + esc(r.note) + '</p>' : '') + '</div></li>';
     }).join('');
-    return '<p class="mt-2 text-body">' +
-      esc(I18N.has(LANG, 'stop.' + s.id + '.detail') ? t('stop.' + s.id + '.detail') : s.detail) + '</p>' +
-      (rows ? '<ul class="list mt-3">' + rows + '</ul>' : '<p class="mt-2 text-small text-muted">' + esc(t('stops.noneHere')) + '</p>') +
-      '<button type="button" class="btn-secondary mt-3" data-report-here="' + s.id + '">' + esc(t('stops.reportHere')) + '</button>';
+    return '<p class="mt-2 text-body">' + esc(tx('stop.' + s.id + '.detail', s.detail)) + '</p>' +
+      (rows ? '<ul class="list mt-3">' + rows + '</ul>' : '<p class="mt-2 text-small text-muted">' + esc(t('stops.noreports.here')) + '</p>') +
+      '<button type="button" class="btn-secondary mt-3" data-report-here="' + s.id + '">' + esc(t('stops.report.here')) + '</button>';
   }
 
-  function fmtLeg(leg) {
-    var min = leg.min;
+  // "40 min", "3 h", "3 h 40 min" — the walk-time half of fmtLeg.
+  function fmtDur(min) {
     var h = Math.floor(min / 60), m = min % 60;
-    var t = h > 0 ? (h + ' h' + (m ? ' ' + m + ' min' : '')) : m + ' min';
-    return t + ', +' + fmtM(leg.climbM) + ' m';
+    return h > 0 ? (h + ' ' + t('unit.h') + (m ? ' ' + m + ' ' + t('unit.min') : '')) : m + ' ' + t('unit.min');
+  }
+  function fmtLeg(leg) {
+    return fmtDur(leg.min) + ', +' + fmtM(leg.climbM) + ' m';
   }
 
   // ── Report tab ─────────────────────────────────────────────────────────
@@ -762,12 +874,12 @@
     if (loc) {
       var n = M.nearestStop(loc.lat, loc.lng);
       hint = n.stop.id === s.id
-        ? t('report.whereClosest', { ago: fmtAgo(nowDate().getTime() - new Date(loc.at).getTime()) })
-        : t('report.whereOther', { stop: n.stop.name });
+        ? t('pick.closest', { ago: I18N.ago(LANG, nowDate().getTime() - new Date(loc.at).getTime()) })
+        : t('pick.near', { name: n.stop.name });
     } else if (lsGet('lastStop', null) && STOP_BY_ID[lsGet('lastStop', null)]) {
-      hint = t('report.whereLast');
+      hint = t('pick.last');
     } else {
-      hint = t('report.whereDefault');
+      hint = t('pick.base');
     }
     $('picker-hint').textContent = hint;
   }
@@ -855,7 +967,7 @@
     if (status >= 400 && status < 500 && status !== 401) {
       var i2 = pending.indexOf(entry);
       if (i2 >= 0) pending.splice(i2, 1);
-      kitToast(t('report.sendFail'));
+      kitToast(t('toast.sendfail'));
       renderReportsAndTrail();
       return true;
     }
@@ -897,12 +1009,12 @@
     var el = $('sent-note');
     var stop = STOP_BY_ID[entry.stopId];
     el.hidden = false;
-    el.innerHTML = '<p class="text-body font-semibold">' + esc(t('sent.title', { cond: condLabel(entry.condition), stop: stop.name })) + '</p>' +
-      '<p class="mt-0.5 text-small text-muted">' + esc(entry.waiting ? t('sent.queued') : t('sent.live')) + '</p>' +
+    el.innerHTML = '<p class="text-body font-semibold">' + esc(t('sent.title', { cond: tx('cond.' + cond.id + '.label', cond.label), stop: stop.name })) + '</p>' +
+      '<p class="mt-0.5 text-small text-muted">' + esc(entry.waiting ? t('sent.waiting') : t('sent.live')) + '</p>' +
       '<div class="mt-3 flex flex-wrap items-center gap-2">' +
-      '<button type="button" class="btn-secondary" data-act="photo">' + iconSvg('camera', 'h-5 w-5') + esc(t('sent.photo')) + '</button>' +
-      '<button type="button" class="btn-secondary" data-act="note">' + iconSvg('note', 'h-5 w-5') + esc(t('sent.note')) + '</button>' +
-      '<button type="button" class="btn-text" data-act="undo">' + esc(t('sent.undo')) + '</button></div>';
+      '<button type="button" class="btn-secondary" data-act="photo">' + iconSvg('camera', 'h-5 w-5') + esc(t('act.photo')) + '</button>' +
+      '<button type="button" class="btn-secondary" data-act="note">' + iconSvg('note', 'h-5 w-5') + esc(t('act.note')) + '</button>' +
+      '<button type="button" class="btn-text" data-act="undo">' + esc(t('undo')) + '</button></div>';
     el.querySelector('[data-act="photo"]').addEventListener('click', function () { addPhoto(entry); });
     el.querySelector('[data-act="note"]').addEventListener('click', function () { addNote(entry); });
     el.querySelector('[data-act="undo"]').addEventListener('click', function () { undoEntry(entry); });
@@ -919,9 +1031,9 @@
       try { res = await api('/api/reports/' + entry.id, { method: 'DELETE' }); } catch (e) {}
       if (res && res.ok) {
         reports = reports.filter(function (r) { return r.id !== entry.id; });
-        kitToast(t('report.removed'));
+        kitToast(t('toast.removed'));
       } else {
-        kitToast(t('report.removeFail'));
+        kitToast(t('toast.removefail'));
         return;
       }
     } else {
@@ -945,10 +1057,10 @@
     var wrap = document.createElement('div');
     wrap.className = 'flex flex-col gap-3 p-4';
     wrap.innerHTML = '<p class="font-display text-heading">' + esc(t('note.title')) + '</p>' +
-      '<textarea id="note-box" class="field" rows="3" maxlength="200" placeholder="' + esc(t('note.placeholder')) + '"></textarea>' +
-      '<p class="text-small text-muted"><span id="note-count">0</span></p>' +
+      '<textarea id="note-box" class="field" rows="3" maxlength="200" placeholder="' + esc(t('note.ph')) + '"></textarea>' +
+      '<p class="text-small text-muted"><span id="note-count">0</span> ' + esc(t('note.count', { n: 0 }).replace(/^0 /, '')) + '</p>' +
       '<div class="flex justify-end gap-2">' +
-      '<button type="button" class="btn-secondary" data-close>' + esc(t('note.cancel')) + '</button>' +
+      '<button type="button" class="btn-secondary" data-close>' + esc(t('cancel')) + '</button>' +
       '<button type="button" class="btn-primary" data-save>' + esc(t('note.save')) + '</button></div>';
     var box = wrap.querySelector('#note-box');
     var count = wrap.querySelector('#note-count');
@@ -985,7 +1097,7 @@
       ov[r.id] = Object.assign({}, ov[r.id], { note: text });
       lsSet('overrides', ov);
       renderReportsAndTrail();
-      kitToast(t('note.added'));
+      kitToast(t('toast.note'));
       return;
     }
     api('/api/reports/' + r.id, { method: 'PATCH', body: { note: text } }).then(function (res) {
@@ -993,9 +1105,9 @@
         var live = null;
         reports.forEach(function (x) { if (x.id === r.id) live = x; });
         if (live) live.note = res.data.report.note;
-        kitToast(t('note.added'));
+        kitToast(t('toast.note'));
       } else {
-        kitToast(t('note.fail'));
+        kitToast(t('toast.notefail'));
       }
       renderReportsAndTrail();
     });
@@ -1005,11 +1117,11 @@
   function addPhoto(entryOrReport) {
     var r = entryOrReport;
     if (!navigator.onLine) {
-      kitToast(t('photo.needConnection'));
+      kitToast(t('toast.photo.offline'));
       return;
     }
     if (!window.usernode || typeof window.usernode.uploadFile !== 'function') {
-      kitToast(t('photo.unavailable'));
+      kitToast(t('toast.photo.na'));
       return;
     }
     photoTarget = r;
@@ -1034,7 +1146,7 @@
         if (r.pending) {
           // The report is still in flight; the photo rides with it once sent.
           r._photo = { url: url, id: pid };
-          kitToast(t('photo.attached'));
+          kitToast(t('toast.photo.pending'));
           return;
         }
         if (isDemoRow(r)) {
@@ -1042,7 +1154,7 @@
           ov[r.id] = Object.assign({}, ov[r.id], { photoUrl: url });
           lsSet('overrides', ov);
           renderReportsAndTrail();
-          kitToast(t('photo.added'));
+          kitToast(t('toast.photo'));
           return;
         }
         var res = await api('/api/reports/' + r.id, { method: 'PATCH', body: { photoUrl: url, photoId: pid } });
@@ -1050,13 +1162,13 @@
           var live = null;
           reports.forEach(function (x) { if (x.id === r.id) live = x; });
           if (live) { live.photoUrl = res.data.report.photoUrl; live.photoId = pid; }
-          kitToast(t('photo.added'));
+          kitToast(t('toast.photo'));
         } else {
-          kitToast(t('photo.fail'));
+          kitToast(t('toast.photofail'));
         }
         renderReportsAndTrail();
       } catch (e) {
-        kitToast(t('photo.unavailableNow'));
+        kitToast(t('toast.photo.error'));
       }
     });
   }
@@ -1090,7 +1202,7 @@
       ov[r.id] = Object.assign({}, ov[r.id], { removed: true });
       lsSet('overrides', ov);
       renderReportsAndTrail();
-      kitToast(t('report.removed'));
+      kitToast(t('toast.removed'));
       return;
     }
     api('/api/reports/' + r.id, { method: 'DELETE' }).then(function (res) {
@@ -1101,9 +1213,9 @@
           }
         } catch (e) {}
         reports = reports.filter(function (x) { return x.id !== r.id; });
-        kitToast(t('report.removed'));
+        kitToast(t('toast.removed'));
       } else {
-        kitToast(t('report.removeFail'));
+        kitToast(t('toast.removefail'));
       }
       renderReportsAndTrail();
     });
@@ -1115,51 +1227,58 @@
       ov[r.id] = Object.assign({}, ov[r.id], { flagged: true });
       lsSet('overrides', ov);
       renderReportsAndTrail();
-      kitToast(t('report.flagged'));
+      kitToast(t('toast.flagged'));
       return;
     }
     api('/api/reports/' + r.id + '/flag', { method: 'POST' }).then(function (res) {
       if (res.ok) {
         reports = reports.filter(function (x) { return x.id !== r.id; });
-        kitToast(t('report.flagged'));
+        kitToast(t('toast.flagged'));
       } else if (res.status === 400) {
-        kitToast(t('report.flagOwn'));
+        kitToast(t('toast.flagown'));
       } else {
-        kitToast(t('report.flagFail'));
+        kitToast(t('toast.flagfail'));
       }
       renderReportsAndTrail();
     });
   }
 
-  // "Still valid": one tap from another hiker keeps a report's 24-hour
-  // window alive. Guests are asked for an account; offline it stays a toast.
+  // "Masih berlaku": the hiker can see the condition is still there. One
+  // confirmation per hiker per report; never queued offline — a tap with no
+  // signal just asks to try again.
   async function confirmReport(r) {
     if (!ME.user) { askForAccount(); return; }
-    if (!navigator.onLine) { kitToast(t('confirm.offline')); return; }
     if (isDemoRow(r)) {
-      var ov = lsGet('overrides', {});
-      var o = ov[r.id] || {};
-      o.confirmedByMe = true;
-      o.confirmCount = (r.confirmCount || 0) + 1;
-      ov[r.id] = o;
-      lsSet('overrides', ov);
-      kitToast(t('confirm.sent'));
+      var dov = lsGet('overrides', {});
+      dov[r.id] = Object.assign({}, dov[r.id], { confirmed: true });
+      lsSet('overrides', dov);
       renderReportsAndTrail();
       return;
     }
+    var live = null;
+    reports.forEach(function (x) { if (x.id === r.id) live = x; });
+    if (!live) return;
+    var prevConfirms = live.confirms || 0;
+    live.confirmedByMe = true;
+    live.confirms = prevConfirms + 1;
+    renderReportsAndTrail();
     var res = null;
-    try { res = await api('/api/reports/' + r.id + '/confirm', { method: 'POST' }); } catch (e) {}
-    if (res && res.ok && res.data && res.data.ok) {
-      var live = null;
-      reports.forEach(function (x) { if (x.id === r.id) live = x; });
-      if (live) {
-        live.confirmCount = res.data.confirmCount;
-        live.confirmedByMe = true;
-        live.expiresAt = res.data.expiresAt;
-      }
-      kitToast(t('confirm.sent'));
+    try {
+      res = await api('/api/reports/' + r.id + '/confirm', { method: 'POST', body: { clientId: uuid() } });
+    } catch (e) {}
+    if (res && res.ok && res.data) {
+      live.confirms = res.data.confirms;
+      live.confirmedByMe = res.data.confirmedByMe !== false;
+    } else if (res && res.status === 400) {
+      live.confirmedByMe = false;
+      live.confirms = prevConfirms;
+      kitToast('You can\'t confirm your own report');
+    } else if (res && res.status === 404) {
+      reports = reports.filter(function (x) { return x.id !== r.id; });
     } else {
-      kitToast(t('confirm.fail'));
+      live.confirmedByMe = false;
+      live.confirms = prevConfirms;
+      kitToast('Couldn\'t confirm. Try again when you have signal.');
     }
     renderReportsAndTrail();
   }
@@ -1170,13 +1289,13 @@
     var items;
     if (r.mine) {
       items = [
-        { label: t('sent.note'), handler: function () { addNote(r); } },
-        { label: t('sent.photo'), handler: function () { addPhoto(r); } },
-        { label: t('report.removeItem'), destructive: true, handler: function () { removeReport(r); } },
+        { label: t('act.note'), handler: function () { addNote(r); } },
+        { label: t('act.photo'), handler: function () { addPhoto(r); } },
+        { label: t('menu.remove'), destructive: true, handler: function () { removeReport(r); } },
       ];
     } else {
       items = [
-        { label: t('report.flagItem'), destructive: true, handler: function () { flagReport(r); } },
+        { label: t('menu.flag'), destructive: true, handler: function () { flagReport(r); } },
       ];
     }
     rowMenu(anchorEl, null, items);
@@ -1193,30 +1312,18 @@
     var c = COND_BY_ID[r.condition];
     var stop = STOP_BY_ID[r.stopId];
     var tone = c.tone === 'danger' ? 'danger' : 'warn';
-    var who = r.mine ? esc(t('who.you')) : esc(r.username);
-    var ago = r.pending ? t('ago.now') : fmtAgo(nowDate().getTime() - new Date(r.createdAt).getTime());
-    var sub = who + ', ' + ago + (r.pending && r.waiting ? esc(t('cond.waiting')) : '');
-    var confirmLine = '';
-    if (!r.pending && !r.mine) {
-      if (r.confirmedByMe) {
-        confirmLine = '<p class="mt-1 text-small font-medium text-accent">' + esc(t('confirm.you')) + '</p>';
-      } else {
-        confirmLine = '<button type="button" class="btn-text" data-confirm="' + r.id + '">' + esc(t('confirm.stillValid')) + '</button>';
-      }
-    }
-    if (r.confirmCount > 0) {
-      confirmLine += '<p class="mt-0.5 text-small text-muted">' + esc(t('confirm.count', { n: fmtNum(r.confirmCount) })) + '</p>';
-    }
+    var who = r.mine ? t('who.you') : esc(r.username);
+    var ago = r.pending ? I18N.ago(LANG, 0) : I18N.ago(LANG, nowDate().getTime() - new Date(r.createdAt).getTime());
+    var sub = who + ', ' + ago + (r.pending && r.waiting ? ' · ' + t('share.section') : '');
     return '<li class="list-row items-start" data-id="' + r.id + '">' +
       '<span class="report-icon report-icon-' + tone + '">' + iconSvg(r.condition, 'h-5 w-5') + '</span>' +
       '<div class="min-w-0 flex-1">' +
-      '<p class="text-body font-semibold">' + esc(condLabel(r.condition)) + ' ' + esc(t('status.at')) + ' ' + esc(stop.name) + '</p>' +
-      '<p class="text-small text-muted">' + sub + '</p>' +
+      '<p class="text-body font-semibold">' + esc(tx('cond.' + c.id + '.label', c.label)) + ' ' + esc(t('strip.at')) + ' ' + esc(stop.name) + '</p>' +
+      '<p class="text-small text-muted">' + esc(sub) + '</p>' +
       (r.note ? '<p class="mt-0.5 text-small">' + esc(r.note) + '</p>' : '') +
-      confirmLine +
       '</div>' +
       (r.photoUrl ? '<button type="button" class="report-thumb" data-photo="' + esc(r.photoUrl) + '" aria-label="' + esc(t('photo.open')) + '">' + iconSvg('photo', 'h-6 w-6') + '</button>' : '') +
-      '<button type="button" class="flex h-11 w-11 flex-none items-center justify-center rounded-lg text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" data-menu aria-label="' + esc(t('report.aria')) + '">' + iconSvg('dots', 'h-5 w-5') + '</button>' +
+      '<button type="button" class="flex h-11 w-11 flex-none items-center justify-center rounded-lg text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" data-menu aria-label="' + esc(t('menu.options')) + '">' + iconSvg('dots', 'h-5 w-5') + '</button>' +
       '</li>';
   }
 
@@ -1232,9 +1339,9 @@
       return;
     }
     if (failed && !usingCache) {
-      ul.innerHTML = '<li class="state-error"><p class="text-body font-medium">' + esc(t('status.loadFail')) + '</p>' +
-        '<p class="text-small text-muted">' + esc(t('status.loadFailSub')) + '</p>' +
-        '<button type="button" id="reports-retry" class="btn-secondary mt-1">' + esc(t('status.retry')) + '</button></li>';
+      ul.innerHTML = '<li class="state-error"><p class="text-body font-medium">' + esc(t('err.reports')) + '</p>' +
+        '<p class="text-small text-muted">' + esc(t('err.still')) + '</p>' +
+        '<button type="button" id="reports-retry" class="btn-secondary mt-1">' + esc(t('retry')) + '</button></li>';
       var rb = $('reports-retry');
       if (rb) rb.addEventListener('click', function () { loadReports(); });
       el.textContent = '';
@@ -1242,25 +1349,20 @@
     }
     var list = visibleReports();
     if (!list.length) {
-      ul.innerHTML = '<li class="state-empty"><p class="text-body font-medium">' + esc(t('report.empty')) + '</p>' +
-        '<p class="text-small text-muted">' + esc(t('report.emptySub')) + '</p></li>';
+      ul.innerHTML = '<li class="state-empty"><p class="text-body font-medium">' + esc(t('reports.empty')) + '</p>' +
+        '<p class="text-small text-muted">' + esc(t('reports.empty.sub')) + '</p></li>';
       el.textContent = '';
       return;
     }
     ul.innerHTML = list.map(reportRowHtml).join('');
     if (failed && usingCache) {
-      el.textContent = t('report.offlineCache', { time: fmtClock(usingCache.at) });
+      el.textContent = t('reports.offline', { time: fmtClock(usingCache.at) });
     } else {
-      el.textContent = t('report.updated', { time: fmtClock(usingCache ? usingCache.at : nowISO()) });
+      el.textContent = t('reports.updated', { time: fmtClock(usingCache ? usingCache.at : nowISO()) });
     }
     Array.prototype.forEach.call(ul.querySelectorAll('[data-menu]'), function (btn) {
       btn.addEventListener('click', function () {
         reportMenu(btn, Number(btn.closest('li').getAttribute('data-id')));
-      });
-    });
-    Array.prototype.forEach.call(ul.querySelectorAll('[data-confirm]'), function (btn) {
-      btn.addEventListener('click', function () {
-        confirmReport(findReportById(Number(btn.getAttribute('data-confirm'))));
       });
     });
     Array.prototype.forEach.call(ul.querySelectorAll('[data-photo]'), function (btn) {
@@ -1269,31 +1371,16 @@
   }
 
   function renderReportsAndTrail() {
-    renderRouteLine();
     renderStatusBanner();
     renderStatus();
     renderReports();
     renderProfile();
     renderStops();
   }
-  // Everything a language switch re-renders: the static HTML strings via
-  // applyI18n, then every screen drawn from JS state.
-  function rerenderAll() {
-    applyI18n();
-    renderHeader();
-    renderReportsAndTrail();
-    renderPermits();
-    renderWeather();
-    renderNotifs();
-    renderPickerHint();
-    renderPacking();
-    renderLocation();
-    renderShareQueue();
-  }
-
   async function loadReports() {
     loading = true;
     failed = false;
+    renderHeader();
     renderReportsAndTrail();
     var res = null;
     try { res = await api('/api/reports'); } catch (e) {}
@@ -1334,24 +1421,22 @@
     var total = 0, done = 0;
     var html = '';
     groups.forEach(function (g) {
-      var gKey = GROUP_KEY[g.group];
-      html += '<h2 class="section-label mt-5">' + esc(gKey ? t(gKey) : g.group) + '</h2><ul class="list">';
+      html += '<h2 class="section-label mt-5">' + esc(tx('pack.group.' + g.key, g.group)) + '</h2><ul class="list">';
       g.items.forEach(function (it) {
         total++;
         var isPacked = !!packedSet[it.id];
         if (isPacked) done++;
-        var label = I18N.has(LANG, 'pack.' + it.id) ? t('pack.' + it.id) : it.label;
-        var note = I18N.has(LANG, 'pack.' + it.id + '.note') ? t('pack.' + it.id + '.note') : (it.note || '');
+        var itLabel = tx('pack.' + it.id + '.label', it.label);
         html += '<li class="list-row' + (isPacked ? ' bg-raised/40' : '') + '">' +
-          '<input type="checkbox" class="pack-box mt-0.5 h-5 w-5 flex-none accent-accent" data-pack="' + it.id + '"' + (isPacked ? ' checked' : '') + ' aria-label="' + esc(label) + '">' +
-          '<div class="min-w-0 flex-1"><p class="text-body' + (isPacked ? ' line-through decoration-line' : '') + '">' + esc(label) + '</p>' +
-          (note ? '<p class="text-small text-muted">' + esc(note) + '</p>' : '') + '</div>' +
+          '<input type="checkbox" class="pack-box mt-0.5 h-5 w-5 flex-none accent-accent" data-pack="' + it.id + '"' + (isPacked ? ' checked' : '') + ' aria-label="' + esc(itLabel) + '">' +
+          '<div class="min-w-0 flex-1"><p class="text-body' + (isPacked ? ' line-through decoration-line' : '') + '">' + esc(itLabel) + '</p>' +
+          '<p class="text-small text-muted">' + esc(tx('pack.' + it.id + '.note', it.note)) + '</p></div>' +
           '<span class="flex-none text-small text-muted">× ' + it.qty + (it.unit ? ' ' + it.unit : '') + '</span></li>';
       });
       html += '</ul>';
     });
     $('packing-groups').innerHTML = html;
-    $('packed-count').textContent = t('packing.packed', { done: done, total: total });
+    $('packed-count').textContent = t('pack.count', { done: done, total: total });
     Array.prototype.forEach.call(document.querySelectorAll('.pack-box'), function (box) {
       box.addEventListener('change', function () {
         var id = box.getAttribute('data-pack');
@@ -1379,24 +1464,24 @@
       try {
         if (window.unNative && typeof unNative.alert === 'function') {
           unNative.alert({
-            title: t('packing.resetTitle'),
-            message: t('packing.resetBody'),
+            title: t('reset.title'),
+            message: t('reset.msg'),
             buttons: [
-              { label: t('note.cancel'), style: 'cancel' },
-              { label: t('packing.reset'), style: 'destructive', handler: function () { resetPacking(); } },
+              { label: t('cancel'), style: 'cancel' },
+              { label: t('pack.reset'), style: 'destructive', handler: function () { resetPacking(); } },
             ],
           });
           return;
         }
       } catch (e) {}
-      if (window.confirm(t('packing.resetTitle') + ' ' + t('packing.resetBody'))) resetPacking();
+      if (window.confirm(t('reset.title') + ' ' + t('reset.msg'))) resetPacking();
     });
   }
   function resetPacking() {
     packing.packed = [];
     savePacking();
     renderPacking();
-    kitToast(t('packing.cleared'));
+    kitToast(t('toast.cleared'));
   }
 
   // ── Location tab ───────────────────────────────────────────────────────
@@ -1407,9 +1492,9 @@
     var n = M.nearestStop(loc.lat, loc.lng);
     var d = Math.round(n.meters / 10) * 10;
     if (n.meters > 2000) {
-      return t('loc.far', { km: (n.meters / 1000).toFixed(1) });
+      return t('loc.far', { km: fmtKm(n.meters / 1000) });
     }
-    return t('loc.near', { m: d, stop: n.stop.name, elev: fmtM(n.stop.elevM) });
+    return t('loc.near', { d: d, name: n.stop.name, elev: fmtM(n.stop.elevM) });
   }
   function renderLocation() {
     var loc = lsGet('location', null);
@@ -1417,7 +1502,7 @@
     if (loc) {
       var acc = loc.accuracy ? t('loc.within', { m: Math.round(loc.accuracy) }) : '';
       body.innerHTML = '<p class="font-semibold tabular-nums">' + loc.lat.toFixed(5) + ', ' + loc.lng.toFixed(5) + esc(acc) + '</p>' +
-        '<p class="mt-0.5 text-small text-muted">' + esc(nearestLine(loc)) + ' · ' + esc(t('loc.takenAt', { time: fmtClock(loc.at) })) + '</p>' +
+        '<p class="mt-0.5 text-small text-muted">' + esc(nearestLine(loc)) + esc(t('loc.taken', { time: fmtClock(loc.at) })) + '</p>' +
         (autoLocOn ? '<p class="mt-0.5 text-small text-muted">' + esc(t('loc.auto')) + '</p>' : '');
     } else {
       body.innerHTML = '<p class="text-body text-muted">' + esc(t('loc.none')) + '</p>';
@@ -1441,7 +1526,7 @@
       } else if (loc.sentAt) {
         html = '<span class="text-accent">' + iconSvg('check', 'h-4 w-4') + '</span> ' + esc(t('loc.sent', { time: fmtClock(loc.sentAt) }));
       } else if (loc.sendFailed) {
-        html = iconSvg('warning', 'h-4 w-4') + ' ' + esc(t('loc.sendFail'));
+        html = iconSvg('warning', 'h-4 w-4') + ' ' + esc(t('loc.sendfail'));
       } else {
         var queued = false;
         queueAll().forEach(function (e) { if (e.kind === 'location' && e.clientId === loc.clientId) queued = true; });
@@ -1507,15 +1592,23 @@
     renderLocSync();
     return settled;
   }
+  function fmtWhen(iso) {
+    var d = new Date(iso);
+    if (!isFinite(d.getTime())) return '';
+    var months = I18N.months(LANG);
+    var h = d.getHours(), m = d.getMinutes();
+    var time = (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+    var date = d.getDate() + ' ' + months[d.getMonth()];
+    return LANG === 'id' ? 'pukul ' + time + ', ' + date : time + ' on ' + date;
+  }
   function buildMessage() {
     var loc = lsGet('location', null);
     var name = ($('name-field').value || '').trim();
     var contact = ($('contact-field').value || '').trim();
     var parts = [];
-    parts.push(name ? t('msg.iam', { name: name, mountain: MOUNTAIN.name })
-      : t('msg.iamNameless', { mountain: MOUNTAIN.name }));
+    parts.push(t('msg.who', { name: name || t('msg.hiker') }));
     if (loc) {
-      parts.push(t('msg.lastLocation', {
+      parts.push(t('msg.loc', {
         when: fmtWhen(loc.at),
         coords: loc.lat.toFixed(5) + ', ' + loc.lng.toFixed(5),
         acc: loc.accuracy ? t('loc.within', { m: Math.round(loc.accuracy) }) : '',
@@ -1523,7 +1616,7 @@
       }));
       parts.push(t('msg.map', { url: 'https://www.google.com/maps?q=' + loc.lat.toFixed(5) + ',' + loc.lng.toFixed(5) }));
     } else {
-      parts.push(t('msg.noLocation'));
+      parts.push(t('msg.noloc'));
     }
     if (contact) parts.push(t('msg.contact', { contact: contact }));
     parts.push(t('msg.emergency'));
@@ -1578,7 +1671,7 @@
       li.appendChild(body);
       var title = document.createElement('p');
       title.className = 'text-body';
-      title.textContent = t('loc.msgFrom', { when: fmtWhen(entry.at) });
+      title.textContent = t('share.from', { when: fmtWhen(entry.at) });
       body.appendChild(title);
       if (entry.coords) {
         var coords = document.createElement('p');
@@ -1592,13 +1685,13 @@
       wa.className = 'btn-secondary';
       wa.target = '_blank';
       wa.rel = 'noopener';
-      wa.setAttribute('aria-label', t('loc.shareWhatsapp'));
-      wa.textContent = t('loc.shareWhatsapp');
+      wa.setAttribute('aria-label', t('share.wa'));
+      wa.textContent = 'WhatsApp';
       wa.href = S.whatsappUrl(entry.text, contact);
       wa.addEventListener('click', function (e) {
         if (!navigator.onLine) {
           e.preventDefault();
-          kitToast(t('loc.stillOffline'));
+          kitToast(t('toast.nosignal'));
           return;
         }
         setTimeout(function () { shareQueueRemove(entry.id); onChange(); }, 0);
@@ -1607,8 +1700,8 @@
       sms.className = 'btn-secondary';
       sms.target = '_blank';
       sms.rel = 'noopener';
-      sms.setAttribute('aria-label', t('loc.shareSms'));
-      sms.textContent = t('loc.shareSms');
+      sms.setAttribute('aria-label', t('share.sms'));
+      sms.textContent = 'SMS';
       sms.href = S.smsUrl(entry.text, contact);
       sms.addEventListener('click', function () {
         setTimeout(function () { shareQueueRemove(entry.id); onChange(); }, 0);
@@ -1616,7 +1709,7 @@
       var rm = document.createElement('button');
       rm.type = 'button';
       rm.className = 'btn-secondary';
-      rm.textContent = t('loc.remove');
+      rm.textContent = t('share.remove');
       rm.addEventListener('click', function () {
         shareQueueRemove(entry.id);
         onChange();
@@ -1636,7 +1729,7 @@
     wrap.className = 'flex flex-col gap-3 p-4';
     var h = document.createElement('h2');
     h.className = 'font-display text-heading';
-    h.textContent = t('loc.backOnline');
+    h.textContent = t('share.back');
     wrap.appendChild(h);
     var p = document.createElement('p');
     p.className = 'text-body text-muted';
@@ -1651,7 +1744,9 @@
     }
     shareQueueRefreshing = function () {
       var q = shareQueueAll();
-      p.textContent = q.length === 1 ? t('loc.readyOne') : t('loc.readyMany', { n: q.length });
+      p.textContent = q.length === 1
+        ? tn('share.ready', 1)
+        : tn('share.ready', q.length);
       ul.textContent = '';
       shareQueueRows(function () {
         renderShareQueue();
@@ -1701,14 +1796,14 @@
         try {
           var r = await window.usernode.requestPermission('geolocation');
           if (r && r.state !== 'granted') {
-            status.textContent = t('loc.permOff');
+            status.textContent = t('loc.perm');
             return;
           }
           if (r && r.active === false) return; // granted; the frame reloads
         } catch (e) {}
       }
       if (!('geolocation' in navigator)) {
-        status.textContent = t('loc.noGps');
+        status.textContent = t('loc.nodevice');
         return;
       }
       status.textContent = t('loc.finding');
@@ -1717,9 +1812,9 @@
         renderLocation();
         buildPicker();
         renderPickerHint();
-        kitToast(t('loc.updated'));
+        kitToast(t('toast.loc'));
       }, function () {
-        status.textContent = t('loc.notFound');
+        status.textContent = t('loc.findfail');
       });
     });
     async function autoLocationTick() {
@@ -1771,7 +1866,7 @@
     $('copy-btn').addEventListener('click', function () { copyMessage(buildMessage()); });
     $('coords-copy').addEventListener('click', function () {
       var loc = lsGet('location', null);
-      if (loc) copyMessage(S.coordsLine(loc.lat, loc.lng), t('loc.copiedCoords'));
+      if (loc) copyMessage(S.coordsLine(loc.lat, loc.lng), t('toast.coords'));
     });
     // Offline, WhatsApp cannot open: keep the message on the phone instead.
     // Online, the anchor opens wa.me as normal.
@@ -1786,14 +1881,14 @@
           at: nowISO(),
         });
         renderShareQueue();
-        kitToast(t('loc.savedOffline'));
+        kitToast(t('toast.saved.offline'));
       }
     });
     autoLocationTick();
     setInterval(autoLocationTick, 60000);
   }
   async function copyMessage(text, doneMsg) {
-    var done = doneMsg || t('loc.copied');
+    var done = doneMsg || t('toast.copied');
     try {
       await navigator.clipboard.writeText(text);
       kitToast(done);
@@ -1808,7 +1903,7 @@
       ta.remove();
       kitToast(done);
     } catch (e) {
-      kitToast(t('loc.copyFail'));
+      kitToast(t('toast.copyfail'));
     }
   }
 
@@ -1865,17 +1960,15 @@
 
   // ── Boot ───────────────────────────────────────────────────────────────
   async function boot() {
+    applyStaticText();
+    renderLangButtons();
+    wireLang();
     picker = $('stop-picker');
-    // Language first, so the first paint is already in the right tongue:
-    // the hiker's own choice, then the platform locale, then the device,
-    // then English. A later platform answer refines it when there is no
-    // stored override.
-    LANG = I18N.resolveLang(storedLang(), null, navigator.language);
-    applyI18n();
     // The guide is part of the app, so it renders from trail-data at once,
     // before anything waits on the network: header, profile and all nine
     // stops now, skeleton bars only where the reports will land.
     renderReportsAndTrail();
+    renderHeader(); // the header too, so it never shifts while reports load
     try {
       var me = await api('/api/me');
       if (me && me.ok && me.data) {
@@ -1886,24 +1979,6 @@
     if (demo) {
       $('demo-line').hidden = false;
       seedDemo();
-      // A demo reload reads its own mt:demo:lang, which the plain-key read
-      // above could not see before the demo flag settled.
-      var demoLang = storedLang();
-      if (demoLang && demoLang !== LANG) {
-        LANG = demoLang;
-        applyI18n();
-      }
-    }
-    // No stored override: let the platform locale refine the guess, and
-    // follow it live when the hiker changes it in Homeroom's settings.
-    if (!storedLang()) {
-      refineLocale();
-      window.addEventListener('usernode:locale-changed', function (e) {
-        var want = e && e.detail && e.detail.locale
-          ? I18N.resolveLang(null, e.detail.locale, navigator.language) : null;
-        var next = want || I18N.resolveLang(null, null, navigator.language);
-        if (next && next !== LANG) { LANG = next; rerenderAll(); }
-      });
     }
     packing = lsGet('packing', null) || { days: 2, people: 1, packed: [] };
     buildPicker();
@@ -1918,7 +1993,7 @@
     renderLocation();
     renderShareQueue();
     if (navigator.onLine && shareQueueAll().length) {
-      kitToast(t('loc.waitingToast'));
+      kitToast(t('toast.queued'));
     }
     renderReportsAndTrail();
     renderPickerHint();
@@ -1950,34 +2025,8 @@
     loadReports();
   }
 
-  // The stored language choice ('id' | 'en'), or null.
-  function storedLang() {
-    var v = lsGet('lang', null);
-    return v === 'id' || v === 'en' ? v : null;
-  }
-  // Asks the platform for the signed-in hiker's locale and refines LANG
-  // when it maps to a language we ship. Silent when there is no shell.
-  async function refineLocale() {
-    var platformLocale = null;
-    try {
-      if (window.usernode && typeof window.usernode.getUserLocale === 'function') {
-        var r = await window.usernode.getUserLocale();
-        platformLocale = r && r.locale ? r.locale : null;
-      }
-    } catch (e) {}
-    var next = I18N.resolveLang(null, platformLocale, navigator.language);
-    if (next && next !== LANG) { LANG = next; rerenderAll(); }
-  }
-  // The Trail header's language pill and the Notifications controls.
+  // The Notifications controls.
   function wireNotifs() {
-    var pill = $('lang-toggle');
-    if (pill) pill.addEventListener('click', function () {
-      LANG = LANG === 'en' ? 'id' : 'en';
-      lsSet('lang', LANG);
-      renderLangPill();
-      rerenderAll();
-    });
-    renderLangPill();
     var follow = $('follow-toggle');
     if (follow) follow.addEventListener('change', function () {
       var follows = lsGet('follows', []);
@@ -1999,20 +2048,17 @@
       renderNotifs();
     });
   }
-  // The pill shows the language you would switch TO.
-  function renderLangPill() {
-    var pill = $('lang-toggle');
-    if (pill) pill.textContent = LANG === 'en' ? 'ID' : 'EN';
-  }
-
   // A toast fallback and a plain-overlay fallback live here so a missing
-  // native kit still reads as the app.
+  // native kit still reads as the app. The fallback toast clears the tab
+  // bar (68 px + the safe-area inset) by 12 px, as the kit's own toast does.
   var style = document.createElement('style');
   style.textContent =
-    '.toast-fallback{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:60;background:rgb(var(--fg));color:rgb(var(--ground));padding:10px 16px;border-radius:9999px;font-size:14px;line-height:20px;max-width:90vw}' +
+    '.toast-fallback{position:fixed;left:50%;bottom:calc(80px + var(--un-safe-inset-bottom, env(safe-area-inset-bottom, 0px)));transform:translateX(-50%);z-index:60;background:rgb(var(--fg));color:rgb(var(--ground));padding:10px 16px;border-radius:9999px;font-size:14px;line-height:20px;max-width:90vw}' +
     '.overlay-fallback{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-end;justify-content:center;background:rgb(var(--fg)/0.4);padding:16px}' +
     '.overlay-card{width:100%;max-width:26rem;background:rgb(var(--surface));border-radius:1rem;padding:8px;max-height:80vh;overflow:auto}';
   document.head.appendChild(style);
 
-  boot();
+  boot().catch(function (e) {
+    console.error('Mountain Trail: boot failed', e && (e.stack || e.message || e));
+  });
 })();

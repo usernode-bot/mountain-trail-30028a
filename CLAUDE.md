@@ -109,8 +109,8 @@ forecast — every block timestamped and marked "not verified" until a person
 confirms it, because the platform offers no live source. Hikers report
 current trail conditions (Slippery, Landslide, No water, Heavy fog,
 Wildlife, Extreme weather, Fallen tree) with one tap and an optional photo,
-confirm someone else's report as "Still valid" to push its 24-hour window
-out, build a packing checklist from days and group size, and share their
+confirm someone else's report as "Still valid" (a count, it does not extend
+the 24 hours), build a packing checklist from days and group size, and share their
 last location as a message for basecamp or family. Reports are shared
 through the server so the next hiker sees them. When a signed-in hiker
 updates their location, a copy is sent to the server (queued offline and
@@ -171,6 +171,15 @@ Re-theme by changing the token values there, keeping every text pair at
 
 ## App-specific conventions
 
+- The app reads in English or Bahasa Indonesia. The language lives in
+  `mt:lang` in localStorage (the same key in the demo and outside it) and is
+  never sent to the server; English is the default and any unknown value is
+  English. New user-facing strings go in BOTH dictionaries in
+  `public/i18n.js` (with a `data-i18n`/`data-i18n-label`/
+  `data-i18n-placeholder` attribute in `index.html` for static text); the
+  test in `test/i18n.test.js` keeps the two in step. Stop names are never
+  translated. Reports store condition ids on the server; labels are only
+  for display and translate per viewer.
 - The guide data (mountain, stops, conditions) lives in
   `public/trail-data.js` and is shared with `server.js`, which validates
   every report's `stop_id` and `condition` against it. The stop table in
@@ -188,10 +197,8 @@ Re-theme by changing the token values there, keeping every text pair at
   `hiker_locations`, an append-only table marked `staging:private`: no GET
   route reads it back and no hiker sees another's location. Guests and
   locations taken before this change are not sent.
-- Reports show for 24 hours. A "Still valid" confirmation from another
-  hiker (a per-user row in `report_confirms`) pushes that window out by
-  24 hours from the latest confirmation. Older ones stay stored but are
-  never displayed anywhere.
+- Reports show for 24 hours. Older ones stay stored but are never
+  displayed anywhere.
 - Two flags hide a report for everyone; the author's own reports are never
   hidden by flags. A report flagged by you disappears for you at once.
 - Shared front-end logic lives in small UMD factory modules next to the
@@ -200,6 +207,11 @@ Re-theme by changing the token values there, keeping every text pair at
   Indonesian and English, key parity asserted by test). Both are precached
   by the service worker like `trail-data.js`. New user-facing copy goes in
   `i18n.js`, never inline.
+- "Masih berlaku" confirmations live in `report_confirms`, a public
+  append-only table like `report_flags`: one row per hiker per report (the
+  primary key), a re-sent tap no-ops on its `client_id`. The count shows on
+  the trail banner and the stop's report row; confirming never extends a
+  report's 24 hours, and old reports cannot be confirmed.
 - The app ships no basecamp phone number: a wrong number in a safety app
   is worse than none. Every share message carries Indonesia's emergency
   number, 112.

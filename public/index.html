@@ -120,14 +120,13 @@
 
     <!-- Trail: the mountain's current state and its route. Reading, so its
          actions stay quiet and the trail line gets the room. -->
-    <section id="tab-trail" role="tabpanel" aria-label="Trail">
+    <section id="tab-trail" role="tabpanel" aria-label="Trail" data-i18n-label="tab.trail">
       <header>
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
             <h1 id="mtn-name" class="font-display text-title">Gede Pangrango</h1>
             <p id="mtn-route" class="mt-1 text-body text-muted"></p>
           </div>
-          <button type="button" id="lang-toggle" class="lang-pill" data-i18n-aria="lang.toggle">EN</button>
         </div>
         <p id="offline-line" class="mt-2 flex items-center gap-1.5 text-small text-muted" hidden></p>
       </header>
@@ -135,7 +134,7 @@
       <!-- The official status: Buka / Dibuka Terbatas / Ditutup, above the
            hikers' own worst report. -->
       <div id="status-banner" class="status-banner status-banner-skeleton mt-4"></div>
-      <div id="status-strip" class="status-strip status-strip-skeleton mt-2.5" role="button" tabindex="0" aria-label="Trail status"></div>
+      <div id="status-strip" class="status-strip status-strip-load mt-2.5" role="button" tabindex="0" aria-label="Trail status" data-i18n-label="strip.status"></div>
 
       <h2 class="section-label mt-6" data-i18n="permits.section">Permits and quota</h2>
       <div id="permits-card" class="card"></div>
@@ -145,10 +144,11 @@
 
       <figure class="mt-5">
         <div id="profile" class="text-muted"></div>
-        <figcaption id="profile-ends" class="mt-1 flex justify-between text-small text-muted"></figcaption>
+        <figcaption id="profile-ends" class="mt-1 flex justify-between text-small text-muted" aria-live="polite"></figcaption>
       </figure>
+      <ol id="profile-stops" class="profile-stops mt-2" aria-label="Stops on the height profile"></ol>
 
-      <h2 class="section-label mt-6" data-i18n="section.stops">Basecamp to summit</h2>
+      <h2 class="section-label mt-6" data-i18n="trail.section">Basecamp to summit</h2>
       <ol id="trail-line" class="trail-line"></ol>
 
       <p class="mt-3 text-small text-muted" data-i18n="trail.approx">Heights, distances and times are approximate guide figures for the Cibodas route, not a survey.</p>
@@ -162,7 +162,7 @@
             <p class="text-body font-semibold" data-i18n="notif.follow">Follow Gede Pangrango</p>
             <p class="mt-0.5 text-small text-muted" data-i18n="notif.followHint">Get told here when trail status, quota or weather warnings change. Off stops it any time.</p>
           </div>
-          <input type="checkbox" id="follow-toggle" class="un-switch flex-none" data-i18n-aria="notif.follow">
+          <input type="checkbox" id="follow-toggle" class="un-switch flex-none" aria-label="Follow Gede Pangrango" data-i18n-label="notif.follow">
         </div>
         <p id="notif-unread" class="mt-2 text-small font-medium text-warn" hidden></p>
       </div>
@@ -171,7 +171,7 @@
     </section>
 
     <!-- Report: one tap sends. The app's one primary action lives here. -->
-    <section id="tab-report" role="tabpanel" aria-label="Report" hidden>
+    <section id="tab-report" role="tabpanel" aria-label="Report" data-i18n-label="tab.report" hidden>
       <header>
         <h1 class="font-display text-heading" data-i18n="report.title">Report the trail</h1>
         <p class="mt-1 text-body text-muted" data-i18n="report.sub">Tap what you see. It sends straight away, or as soon as you have signal.</p>
@@ -184,85 +184,85 @@
       <div id="condition-buttons" class="mt-4 grid grid-cols-2 gap-2.5">
         <button type="button" class="condition-button" data-cond="slippery">
           <svg class="condition-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 14c2 0 2-2 4.5-2S10 14 12 14s2.5-2 4.5-2 2.5 2 4.5 2"/><path d="M3 19c2 0 2-2 4.5-2S10 19 12 19s2.5-2 4.5-2 2.5 2 4.5 2"/><path d="M9 4l3 4 3-4"/></svg>
-          <span class="font-semibold" data-i18n="cond.slippery">Slippery</span>
+          <span class="font-semibold" data-i18n="cond.slippery.label">Slippery</span>
           <span class="text-small text-muted" data-i18n="cond.slippery.hint">Wet rock or mud</span>
         </button>
         <button type="button" class="condition-button condition-button-danger" data-cond="landslide">
           <svg class="condition-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 20h18"/><path d="M3 20L10 6l4 7"/><circle cx="16" cy="15" r="1.6"/><circle cx="19" cy="18" r="1.2"/><circle cx="13.5" cy="17.5" r="1.2"/></svg>
-          <span class="font-semibold" data-i18n="cond.landslide">Landslide</span>
+          <span class="font-semibold" data-i18n="cond.landslide.label">Landslide</span>
           <span class="text-small text-muted" data-i18n="cond.landslide.hint">Path buried or broken</span>
         </button>
         <button type="button" class="condition-button" data-cond="no-water">
           <svg class="condition-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3c3.5 4.5 6 7.6 6 10.5a6 6 0 0 1-12 0C6 10.6 8.5 7.5 12 3z"/><path d="M4 4l16 16"/></svg>
-          <span class="font-semibold" data-i18n="cond.no-water">No water</span>
+          <span class="font-semibold" data-i18n="cond.no-water.label">No water</span>
           <span class="text-small text-muted" data-i18n="cond.no-water.hint">Source dry or barely flowing</span>
         </button>
         <button type="button" class="condition-button" data-cond="heavy-fog">
           <svg class="condition-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5h9"/><path d="M4 9h16"/><path d="M3 13h14"/><path d="M6 17h15"/><path d="M9 21h8"/></svg>
-          <span class="font-semibold" data-i18n="cond.heavy-fog">Heavy fog</span>
+          <span class="font-semibold" data-i18n="cond.heavy-fog.label">Heavy fog</span>
           <span class="text-small text-muted" data-i18n="cond.heavy-fog.hint">Can't see the next marker</span>
         </button>
         <button type="button" class="condition-button" data-cond="wildlife">
           <svg class="condition-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 9c0-3 2.5-5 7-5s7 2 7 5-3 5-7 5-7-2-7-5z"/><path d="M12 14v3"/><path d="M8 18c1.5-1 6.5-1 8 0"/><circle cx="9" cy="8.5" r="0.75" fill="currentColor" stroke="none"/><circle cx="15" cy="8.5" r="0.75" fill="currentColor" stroke="none"/></svg>
-          <span class="font-semibold" data-i18n="cond.wildlife">Wildlife</span>
+          <span class="font-semibold" data-i18n="cond.wildlife.label">Wildlife</span>
           <span class="text-small text-muted" data-i18n="cond.wildlife.hint">Unusual animals near the path</span>
         </button>
         <button type="button" class="condition-button condition-button-danger" data-cond="fallen-tree">
           <svg class="condition-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21L20 5"/><path d="M20 5l-1.5-3"/><path d="M20 5l3 1.5"/><path d="M9 16l2 2"/><path d="M13 12l2 2"/><path d="M17 8l2 2"/></svg>
-          <span class="font-semibold" data-i18n="cond.fallen-tree">Fallen tree</span>
+          <span class="font-semibold" data-i18n="cond.fallen-tree.label">Fallen tree</span>
           <span class="text-small text-muted" data-i18n="cond.fallen-tree.hint">Trunk blocking the path</span>
         </button>
         <button type="button" class="condition-button col-span-2" data-cond="extreme-weather">
           <svg class="condition-button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7c2 0 2-1.5 4-1.5S11 7 13 7s2-1.5 4-1.5 2 1.5 4 1.5"/><path d="M5 12c2 0 2-1.5 4-1.5S11 12 13 12s2-1.5 4-1.5 2 1.5 4 1.5"/><path d="M5 17c2 0 2-1.5 4-1.5S11 17 13 17s2-1.5 4-1.5 2 1.5 4 1.5"/></svg>
-          <span class="font-semibold" data-i18n="cond.extreme-weather">Extreme weather</span>
+          <span class="font-semibold" data-i18n="cond.extreme-weather.label">Extreme weather</span>
           <span class="text-small text-muted" data-i18n="cond.extreme-weather.hint">Heavy rain or strong wind</span>
         </button>
       </div>
 
       <div id="sent-note" class="card mt-3" hidden></div>
 
-      <h2 class="section-label mt-6" data-i18n="report.latest">Latest reports, last 24 hours</h2>
+      <h2 class="section-label mt-6" data-i18n="report.section">Latest reports, last 24 hours</h2>
       <ul id="reports-list" class="list"></ul>
       <p id="reports-refreshed" class="mt-2 text-small text-muted"></p>
       <input type="file" id="photo-input" accept="image/*" class="hidden" aria-hidden="true" tabindex="-1">
     </section>
 
     <!-- Packing: two numbers, and the list builds itself. -->
-    <section id="tab-packing" role="tabpanel" aria-label="Packing" hidden>
+    <section id="tab-packing" role="tabpanel" aria-label="Packing" data-i18n-label="tab.packing" hidden>
       <header>
-        <h1 class="font-display text-heading" data-i18n="packing.title">Pack for the climb</h1>
-        <p class="mt-1 text-body text-muted" data-i18n="packing.sub">The list builds itself from your days and group, and from this mountain.</p>
+        <h1 class="font-display text-heading" data-i18n="pack.title">Pack for the climb</h1>
+        <p class="mt-1 text-body text-muted" data-i18n="pack.sub">The list builds itself from your days and group, and from this mountain.</p>
       </header>
 
       <div class="mt-4 grid grid-cols-2 gap-2.5">
         <div class="card flex flex-col gap-1 p-3">
-          <span id="days-label" class="text-small text-muted" data-i18n="packing.days">Days on the mountain</span>
+          <span id="days-label" class="text-small text-muted" data-i18n="pack.days">Days on the mountain</span>
           <div class="flex items-center gap-2">
-            <button type="button" id="days-minus" class="stepper-btn" data-i18n-aria="packing.dayFewer">−</button>
+            <button type="button" id="days-minus" class="stepper-btn" aria-label="One day fewer" data-i18n-label="pack.days.fewer">−</button>
             <span id="days-value" class="flex-1 text-center text-body font-semibold" aria-labelledby="days-label">2</span>
-            <button type="button" id="days-plus" class="stepper-btn" data-i18n-aria="packing.dayMore">+</button>
+            <button type="button" id="days-plus" class="stepper-btn" aria-label="One day more" data-i18n-label="pack.days.more">+</button>
           </div>
         </div>
         <div class="card flex flex-col gap-1 p-3">
-          <span id="people-label" class="text-small text-muted" data-i18n="packing.people">People in your group</span>
+          <span id="people-label" class="text-small text-muted" data-i18n="pack.people">People in your group</span>
           <div class="flex items-center gap-2">
-            <button type="button" id="people-minus" class="stepper-btn" data-i18n-aria="packing.personFewer">−</button>
+            <button type="button" id="people-minus" class="stepper-btn" aria-label="One person fewer" data-i18n-label="pack.people.fewer">−</button>
             <span id="people-value" class="flex-1 text-center text-body font-semibold" aria-labelledby="people-label">1</span>
-            <button type="button" id="people-plus" class="stepper-btn" data-i18n-aria="packing.personMore">+</button>
+            <button type="button" id="people-plus" class="stepper-btn" aria-label="One person more" data-i18n-label="pack.people.more">+</button>
           </div>
         </div>
       </div>
 
       <div class="mt-4 flex items-center justify-between">
-        <p id="packed-count" class="text-body font-semibold"></p>
-        <button type="button" id="packing-reset" class="btn-secondary" data-i18n="packing.reset">Start over</button>
+        <p id="packed-count" class="text-body font-semibold">0 of 0 packed</p>
+        <button type="button" id="packing-reset" class="btn-secondary" data-i18n="pack.reset">Start over</button>
       </div>
 
       <div id="packing-groups"></div>
     </section>
 
     <!-- Location: the last saved position, and a message ready to send. -->
-    <section id="tab-location" role="tabpanel" aria-label="Location" hidden>
+    <section id="tab-location" role="tabpanel" aria-label="Location" data-i18n-label="tab.location" hidden>
       <header>
         <h1 class="font-display text-heading" data-i18n="loc.title">Last location</h1>
         <p class="mt-1 text-body text-muted" data-i18n="loc.sub">Your coordinates, ready to send to basecamp or to family.</p>
@@ -273,33 +273,39 @@
         <p id="loc-sync" class="mt-2 flex items-center gap-1.5 text-small text-muted" hidden></p>
         <div class="mt-3 flex flex-col gap-2">
           <button type="button" id="loc-update" class="btn-secondary" data-i18n="loc.update">Update my location</button>
-          <button type="button" id="coords-copy" class="btn-secondary" hidden data-i18n="loc.copyCoords">Copy coordinates</button>
+          <button type="button" id="coords-copy" class="btn-secondary" data-i18n="loc.copy" hidden>Copy coordinates</button>
         </div>
         <p id="loc-status" class="mt-2 text-small text-muted"></p>
       </div>
 
       <label for="name-field" class="mb-1.5 mt-5 block text-small font-medium" data-i18n="loc.name">Your name</label>
-      <input type="text" id="name-field" class="field" maxlength="60" autocomplete="name" data-i18n-ph="loc.namePh" placeholder="e.g. Ayu">
+      <input type="text" id="name-field" class="field" maxlength="60" autocomplete="name" placeholder="e.g. Ayu" data-i18n-placeholder="loc.name.ph">
       <label for="contact-field" class="mb-1.5 mt-3 block text-small font-medium" data-i18n="loc.contact">Basecamp contact</label>
-      <input type="text" id="contact-field" class="field" maxlength="40" autocomplete="tel" inputmode="tel" data-i18n-ph="loc.contactPh" placeholder="e.g. 0812 0000 0000">
-      <p class="mt-1.5 text-small text-muted" data-i18n="loc.optNote">Both optional, kept on this phone only. Every message carries Indonesia's emergency number, 112.</p>
+      <input type="text" id="contact-field" class="field" maxlength="40" autocomplete="tel" inputmode="tel" placeholder="e.g. 0812 0000 0000" data-i18n-placeholder="loc.contact.ph">
+      <p class="mt-1.5 text-small text-muted" data-i18n="loc.optional">Both optional, kept on this phone only. Every message carries Indonesia's emergency number, 112.</p>
 
-      <h2 class="section-label mt-6" data-i18n="loc.msgSection">Message to send</h2>
+      <p id="lang-label" class="mb-1.5 mt-5 block text-small font-medium">Language / Bahasa</p>
+      <div class="grid grid-cols-2 gap-2" role="group" aria-labelledby="lang-label">
+        <button type="button" class="btn-secondary" data-lang="en" lang="en" aria-pressed="true">English</button>
+        <button type="button" class="btn-secondary" data-lang="id" lang="id" aria-pressed="false">Bahasa Indonesia</button>
+      </div>
+
+      <h2 class="section-label mt-6" data-i18n="loc.msg.section">Message to send</h2>
       <div class="card">
         <p id="msg-preview" class="whitespace-pre-wrap text-body"></p>
       </div>
       <div class="mt-3 flex flex-col gap-2">
         <button type="button" id="share-btn" class="btn-primary" data-i18n="loc.share">Share with basecamp</button>
         <div class="grid grid-cols-2 gap-2">
-          <a id="wa-btn" class="btn-secondary" target="_blank" rel="noopener" aria-label="WhatsApp" data-i18n-aria="loc.shareWhatsapp">WhatsApp</a>
-          <a id="sms-btn" class="btn-secondary" target="_blank" rel="noopener" aria-label="SMS" data-i18n-aria="loc.shareSms">SMS</a>
+          <a id="wa-btn" class="btn-secondary" target="_blank" rel="noopener" aria-label="Send by WhatsApp" data-i18n-label="share.wa">WhatsApp</a>
+          <a id="sms-btn" class="btn-secondary" target="_blank" rel="noopener" aria-label="Send by SMS" data-i18n-label="share.sms">SMS</a>
         </div>
-        <button type="button" id="copy-btn" class="btn-secondary" data-i18n="loc.copyMsg">Copy message</button>
+        <button type="button" id="copy-btn" class="btn-secondary" data-i18n="loc.copymsg">Copy message</button>
       </div>
-      <p class="mt-2 text-small text-muted" data-i18n="loc.shareNote">WhatsApp needs mobile data. SMS needs only phone signal. With no signal at all, read the coordinates out over radio.</p>
+      <p class="mt-2 text-small text-muted" data-i18n="loc.hint">WhatsApp needs mobile data. SMS needs only phone signal. With no signal at all, read the coordinates out over radio.</p>
 
       <div id="share-queue-wrap" hidden>
-        <h2 class="section-label mt-6" data-i18n="loc.waiting">Waiting for signal</h2>
+        <h2 class="section-label mt-6" data-i18n="share.section">Waiting for signal</h2>
         <ul id="share-queue" class="list"></ul>
       </div>
     </section>
@@ -329,8 +335,8 @@
   <script src="/trail-data.js"></script>
   <script src="/packing.js"></script>
   <script src="/status.js"></script>
-  <script src="/i18n.js"></script>
   <script src="/share-links.js"></script>
+  <script src="/i18n.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

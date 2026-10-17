@@ -9,11 +9,11 @@ var CACHE = 'mt-shell-v3';
 var PRECACHE = [
   '/',
   '/tailwind.css',
+  '/i18n.js',
   '/app.js',
   '/trail-data.js',
   '/packing.js',
   '/status.js',
-  '/i18n.js',
   '/share-links.js',
 ];
 
