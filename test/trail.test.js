@@ -22,6 +22,19 @@ test("every leg's climb matches the height difference to the next stop", () => {
   assert.equal(T.STOPS[T.STOPS.length - 1].legToNext, null, 'the summit has no next stop');
 });
 
+test('minutes from basecamp add up each leg', () => {
+  assert.equal(T.MIN_FROM_BASECAMP.cibodas, 0);
+  for (let i = 1; i < T.STOPS.length; i++) {
+    assert.equal(
+      T.MIN_FROM_BASECAMP[T.STOPS[i].id],
+      T.MIN_FROM_BASECAMP[T.STOPS[i - 1].id] + T.STOPS[i - 1].legToNext.min,
+      T.STOPS[i].id + ' cumulative minutes'
+    );
+  }
+  assert.equal(T.MIN_FROM_BASECAMP['puncak-gede'], 320);
+  assert.equal(Object.keys(T.MIN_FROM_BASECAMP).length, T.STOPS.length, 'one key per stop');
+});
+
 test('nearestStop returns air-panas for its own coordinates', () => {
   const ap = T.STOPS.find((s) => s.id === 'air-panas');
   const near = T.nearestStop(ap.lat, ap.lng);
