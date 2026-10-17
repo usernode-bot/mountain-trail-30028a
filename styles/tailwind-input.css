@@ -81,6 +81,13 @@
   .btn-secondary {
     @apply border border-line bg-surface text-fg hover:bg-raised;
   }
+  /* The chosen language button: forest green border, soft green tint,
+     semibold, from the tokens so it reads in both looks. */
+  .btn-secondary[aria-pressed="true"] {
+    border: 2px solid rgb(var(--accent));
+    background: rgb(var(--accent) / 0.08);
+    font-weight: 600;
+  }
 
   /* Text inputs, selects and textareas: <input class="field">, 44 px tall.
      The placeholder is a faint hint (muted at 60%), so an example such as

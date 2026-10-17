@@ -13,6 +13,7 @@
   var M = window.MT_TRAIL;
   var P = window.MT_PACKING;
   var S = window.MT_SHARE;
+  var I18N = window.MT_I18N;
   var MOUNTAIN = M.MOUNTAIN;
   var STOPS = M.STOPS;
   var STOP_BY_ID = M.STOP_BY_ID;
@@ -25,8 +26,8 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
-  function fmtM(n) { return n.toLocaleString('en-US'); }
-  function fmtKm(km) { return km % 1 === 0 ? String(km) : km.toFixed(1); }
+  function fmtM(n) { return I18N.fmtNum(LANG, n); }
+  function fmtKm(km) { return I18N.fmtKm(LANG, km); }
   function uuid() {
     if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
     return 'r-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
@@ -73,6 +74,14 @@
   }
 
   // ── Token, demo mode and storage ───────────────────────────────────────
+  // The language is read straight from mt:lang (never through lsGet: the
+  // first render happens before /api/me says whether this is the demo, and
+  // the language is the same setting in the demo and outside it).
+  var LANG = 'en';
+  try { LANG = I18N.normalizeLang(localStorage.getItem('mt:lang')); } catch (e) {}
+  function t(key, vars) { return I18N.t(LANG, key, vars); }
+  function tn(key, n, vars) { return I18N.tn(LANG, key, n, vars); }
+  function tx(key, english) { return I18N.tx(LANG, key, english); }
   var TOKEN = '';
   var PAGE_DEMO = /[?&]demo=1/.test(location.search);
   try { TOKEN = new URLSearchParams(location.search).get('token') || ''; } catch (e) {}
@@ -242,7 +251,57 @@
         return;
       }
     } catch (e) {}
-    kitToast('Make a Homeroom account to report conditions');
+    kitToast(t('toast.account'));
+  }
+
+  // ── Language ───────────────────────────────────────────────────────────
+  // Every static string in index.html carries its English text and a key;
+  // this walks them and applies the chosen language. English stays in the
+  // markup, so a missing script still reads.
+  function applyStaticText() {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-i18n]'), function (el) {
+      el.textContent = t(el.getAttribute('data-i18n'));
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-i18n-label]'), function (el) {
+      el.setAttribute('aria-label', t(el.getAttribute('data-i18n-label')));
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-i18n-placeholder]'), function (el) {
+      el.setAttribute('placeholder', t(el.getAttribute('data-i18n-placeholder')));
+    });
+    document.documentElement.lang = LANG;
+  }
+  var LANG_TEXT = { en: 'English', id: 'Bahasa Indonesia' };
+  function renderLangButtons() {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-lang]'), function (btn) {
+      var on = btn.getAttribute('data-lang') === LANG;
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      btn.innerHTML = on ? iconSvg('check', 'h-4 w-4') + esc(LANG_TEXT[btn.getAttribute('data-lang')]) : esc(LANG_TEXT[btn.getAttribute('data-lang')]);
+    });
+  }
+  function setLang(v) {
+    LANG = I18N.normalizeLang(v);
+    try { localStorage.setItem('mt:lang', LANG); } catch (e) {}
+    rerenderAll();
+  }
+  function wireLang() {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-lang]'), function (btn) {
+      btn.addEventListener('click', function () { setLang(btn.getAttribute('data-lang')); });
+    });
+  }
+  // The whole app switches at once, no reload. A sheet already open keeps
+  // the language it opened with; everything re-rendered uses the new one.
+  function rerenderAll() {
+    applyStaticText();
+    renderLangButtons();
+    renderHeader();
+    renderReportsAndTrail();
+    if (picker) { buildPicker(); renderPickerHint(); }
+    if (packing) renderPacking();
+    renderLocation();
+    renderShareQueue();
+    if (lastAction) showSentNote(lastAction);
+    var status = $('loc-status');
+    if (status) status.textContent = '';
   }
 
   // ── Tabs ───────────────────────────────────────────────────────────────
@@ -271,13 +330,19 @@
 
   // ── Trail tab ──────────────────────────────────────────────────────────
   function renderHeader() {
+    $('mtn-route').textContent = t('trail.route', {
+      elev: fmtM(MOUNTAIN.summitM),
+      km: fmtKm(MOUNTAIN.lengthKm),
+      climb: fmtM(MOUNTAIN.climbM),
+      hours: t('trail.hours'),
+    });
     var line = $('offline-line');
     if (!navigator.onLine && usingCache) {
       line.hidden = false;
-      line.innerHTML = iconSvg('clock', 'h-4 w-4') + ' Offline. Reports from ' + fmtClock(usingCache.at);
+      line.innerHTML = iconSvg('clock', 'h-4 w-4') + ' ' + esc(t('trail.offline', { time: fmtClock(usingCache.at) }));
     } else if (swReady) {
       line.hidden = false;
-      line.innerHTML = '<span class="text-accent">' + iconSvg('check', 'h-4 w-4') + '</span> Guide saved for offline use';
+      line.innerHTML = '<span class="text-accent">' + iconSvg('check', 'h-4 w-4') + '</span> ' + esc(t('trail.saved'));
     } else {
       line.hidden = true;
       line.textContent = '';
@@ -302,17 +367,17 @@
       return;
     }
     if (failed) {
-      el.innerHTML = '<div class="flex-1"><p class="text-body">Couldn\'t load today\'s reports.</p>' +
-        '<p class="text-small text-muted">The guide, packing list and location still work.</p></div>' +
-        '<button type="button" id="status-retry" class="btn-secondary self-center">Retry</button>';
+      el.innerHTML = '<div class="flex-1"><p class="text-body">' + esc(t('err.reports')) + '</p>' +
+        '<p class="text-small text-muted">' + esc(t('err.still')) + '</p></div>' +
+        '<button type="button" id="status-retry" class="btn-secondary self-center">' + esc(t('retry')) + '</button>';
       $('status-retry').addEventListener('click', function () { loadReports(); });
       return;
     }
     var list = visibleReports();
     if (!list.length) {
       el.innerHTML = iconSvg('check', 'status-strip-icon') +
-        '<div><p class="text-body font-medium">No trail warnings in the last 24 hours</p>' +
-        '<p class="text-small text-muted">Seen something? The Report tab takes one tap.</p></div>';
+        '<div><p class="text-body font-medium">' + esc(t('strip.none')) + '</p>' +
+        '<p class="text-small text-muted">' + esc(t('strip.none.sub')) + '</p></div>';
       el.removeAttribute('role');
       return;
     }
@@ -330,11 +395,11 @@
     var others = list.length - 1;
     el.setAttribute('role', 'button');
     el.setAttribute('tabindex', '0');
-    el.setAttribute('aria-label', 'Open ' + STOP_BY_ID[worst.stopId].name);
+    el.setAttribute('aria-label', t('strip.open', { name: STOP_BY_ID[worst.stopId].name }));
     el.innerHTML = iconSvg(worst.condition === 'landslide' ? 'landslide' : worst.condition, 'status-strip-icon') +
-      '<div><p class="text-body font-medium">' + esc(cond.label) + ' at ' + esc(STOP_BY_ID[worst.stopId].name) + '</p>' +
-      '<p class="text-small text-muted">Reported ' + esc(M.formatAgo(nowDate().getTime() - new Date(worst.createdAt).getTime())) +
-      (others > 0 ? '. ' + others + ' more report' + (others === 1 ? '' : 's') + ' in the last 24 hours.' : '.') + '</p></div>';
+      '<div><p class="text-body font-medium">' + esc(tx('cond.' + cond.id + '.label', cond.label)) + ' ' + esc(t('strip.at')) + ' ' + esc(STOP_BY_ID[worst.stopId].name) + '</p>' +
+      '<p class="text-small text-muted">' + esc(t('strip.reported', { ago: I18N.ago(LANG, nowDate().getTime() - new Date(worst.createdAt).getTime()) })) +
+      (others > 0 ? '. ' + esc(tn('reports.more', others)) : '') + '.</p></div>';
     function openWorst() {
       expandedStop = worst.stopId;
       renderStops();
@@ -364,10 +429,10 @@
       return '<circle class="' + cls + '" cx="' + px(s.km).toFixed(1) + '" cy="' + py(s.elevM).toFixed(1) + '" r="' + r + '"/>';
     }).join('');
     $('profile').innerHTML =
-      '<svg viewBox="0 0 358 80" class="block w-full" role="img" aria-label="Height profile from basecamp to summit">' +
+      '<svg viewBox="0 0 358 80" class="block w-full" role="img" aria-label="' + esc(t('profile.aria')) + '">' +
       '<line x1="0" y1="77" x2="358" y2="77" style="stroke:rgb(var(--line));stroke-width:1"/>' +
       '<polyline class="profile-line" points="' + pts + '"/>' + dots + '</svg>';
-    $('profile-ends').innerHTML = '<span>Basecamp ' + fmtM(STOPS[0].elevM) + ' m</span><span>Summit ' + fmtM(eMax) + ' m</span>';
+    $('profile-ends').innerHTML = '<span>' + esc(t('profile.base', { m: fmtM(STOPS[0].elevM) })) + '</span><span>' + esc(t('profile.summit', { m: fmtM(eMax) })) + '</span>';
   }
 
   function condLineHtml(stop) {
@@ -376,14 +441,14 @@
       return '<p class="cond-line cond-line-none"><i></i><span class="skeleton h-3.5 w-32"></span></p>';
     }
     if (!reps.length) {
-      return '<p class="cond-line cond-line-none"><i></i>No reports in 24 h</p>';
+      return '<p class="cond-line cond-line-none"><i></i>' + esc(t('stops.noreports')) + '</p>';
     }
     var rep = reps[0];
     var c = COND_BY_ID[rep.condition];
-    var extra = reps.length > 1 ? ', and ' + (reps.length - 1) + ' more' : '';
-    var waiting = rep.pending && rep.waiting ? ' · Waiting for signal' : '';
+    var extra = reps.length > 1 ? t('stops.more', { n: reps.length - 1 }) : '';
+    var waiting = rep.pending && rep.waiting ? ' · ' + t('share.section') : '';
     return '<p class="cond-line cond-line-' + (c.tone === 'danger' ? 'danger' : 'warn') + '"><i></i>' +
-      esc(c.label) + ', ' + esc(M.formatAgo(nowDate().getTime() - new Date(rep.createdAt).getTime())) + esc(extra) + esc(waiting) + '</p>';
+      esc(tx('cond.' + c.id + '.label', c.label)) + ', ' + esc(I18N.ago(LANG, nowDate().getTime() - new Date(rep.createdAt).getTime())) + esc(extra) + esc(waiting) + '</p>';
   }
 
   function stopTone(stop) {
@@ -400,16 +465,16 @@
       var open = expandedStop === s.id;
       var facs = '';
       if (s.kinds.indexOf('water') >= 0) {
-        facs += '<span class="fac-water">' + iconSvg('drop', 'h-4 w-4') + 'Water</span>';
+        facs += '<span class="fac-water">' + iconSvg('drop', 'h-4 w-4') + esc(t('fac.water')) + '</span>';
       }
       if (s.kinds.indexOf('camp') >= 0 || s.kinds.indexOf('basecamp') >= 0) {
-        facs += '<span>' + iconSvg('tent', 'h-4 w-4') + 'Camp</span>';
+        facs += '<span>' + iconSvg('tent', 'h-4 w-4') + esc(t('fac.camp')) + '</span>';
       }
       html += '<li class="stop-row" id="stop-' + s.id + '" data-stop="' + s.id + '">' +
         '<span class="stop-node' + stopTone(s) + '">' + iconSvg(stopIcon(s), 'h-5 w-5') + '</span>' +
         '<div class="stop-body">' +
         '<p class="text-body font-semibold">' + esc(s.name) + '</p>' +
-        '<p class="mt-1 text-small text-muted">' + fmtM(s.elevM) + ' m, km ' + fmtKm(s.km) + '. ' + esc(s.short) + '</p>' +
+        '<p class="mt-1 text-small text-muted">' + fmtM(s.elevM) + ' m, km ' + fmtKm(s.km) + '. ' + esc(tx('stop.' + s.id + '.short', s.short)) + '</p>' +
         (facs ? '<p class="fac">' + facs + '</p>' : '') +
         condLineHtml(s) +
         (open ? expandedHtml(s) : '') +
@@ -448,20 +513,20 @@
       var c = COND_BY_ID[r.condition];
       return '<li class="list-row items-start">' +
         '<span class="report-icon report-icon-' + (c.tone === 'danger' ? 'danger' : 'warn') + '">' + iconSvg(r.condition === 'landslide' ? 'landslide' : r.condition, 'h-4 w-4') + '</span>' +
-        '<div class="min-w-0 flex-1"><p class="text-body font-medium">' + esc(c.label) + '</p>' +
-        '<p class="text-small text-muted">' + (r.mine ? 'You' : esc(r.username)) + ', ' + esc(M.formatAgo(nowDate().getTime() - new Date(r.createdAt).getTime())) + '</p>' +
+        '<div class="min-w-0 flex-1"><p class="text-body font-medium">' + esc(tx('cond.' + c.id + '.label', c.label)) + '</p>' +
+        '<p class="text-small text-muted">' + (r.mine ? esc(t('who.you')) : esc(r.username)) + ', ' + esc(I18N.ago(LANG, nowDate().getTime() - new Date(r.createdAt).getTime())) + '</p>' +
         (r.note ? '<p class="mt-0.5 text-small">' + esc(r.note) + '</p>' : '') + '</div></li>';
     }).join('');
-    return '<p class="mt-2 text-body">' + esc(s.detail) + '</p>' +
-      (rows ? '<ul class="list mt-3">' + rows + '</ul>' : '<p class="mt-2 text-small text-muted">No reports here in the last 24 hours.</p>') +
-      '<button type="button" class="btn-secondary mt-3" data-report-here="' + s.id + '">Report here</button>';
+    return '<p class="mt-2 text-body">' + esc(tx('stop.' + s.id + '.detail', s.detail)) + '</p>' +
+      (rows ? '<ul class="list mt-3">' + rows + '</ul>' : '<p class="mt-2 text-small text-muted">' + esc(t('stops.noreports.here')) + '</p>') +
+      '<button type="button" class="btn-secondary mt-3" data-report-here="' + s.id + '">' + esc(t('stops.report.here')) + '</button>';
   }
 
   function fmtLeg(leg) {
     var min = leg.min;
     var h = Math.floor(min / 60), m = min % 60;
-    var t = h > 0 ? (h + ' h' + (m ? ' ' + m + ' min' : '')) : m + ' min';
-    return t + ', +' + fmtM(leg.climbM) + ' m';
+    var time = h > 0 ? (h + ' ' + t('unit.h') + (m ? ' ' + m + ' ' + t('unit.min') : '')) : m + ' ' + t('unit.min');
+    return time + ', +' + fmtM(leg.climbM) + ' m';
   }
 
   // ── Report tab ─────────────────────────────────────────────────────────
@@ -478,12 +543,12 @@
     if (loc) {
       var n = M.nearestStop(loc.lat, loc.lng);
       hint = n.stop.id === s.id
-        ? 'Closest stop to your last location, ' + M.formatAgo(nowDate().getTime() - new Date(loc.at).getTime())
-        : 'Your last location is closest to ' + n.stop.name;
+        ? t('pick.closest', { ago: I18N.ago(LANG, nowDate().getTime() - new Date(loc.at).getTime()) })
+        : t('pick.near', { name: n.stop.name });
     } else if (lsGet('lastStop', null) && STOP_BY_ID[lsGet('lastStop', null)]) {
-      hint = 'The stop you reported from last time';
+      hint = t('pick.last');
     } else {
-      hint = 'Basecamp, where the route starts';
+      hint = t('pick.base');
     }
     $('picker-hint').textContent = hint;
   }
@@ -571,7 +636,7 @@
     if (status >= 400 && status < 500 && status !== 401) {
       var i2 = pending.indexOf(entry);
       if (i2 >= 0) pending.splice(i2, 1);
-      kitToast('That report could not be sent. Try again.');
+      kitToast(t('toast.sendfail'));
       renderReportsAndTrail();
       return true;
     }
@@ -614,12 +679,12 @@
     var cond = COND_BY_ID[entry.condition];
     var stop = STOP_BY_ID[entry.stopId];
     el.hidden = false;
-    el.innerHTML = '<p class="text-body font-semibold">' + esc(cond.label) + ' at ' + esc(stop.name) + ' reported.</p>' +
-      '<p class="mt-0.5 text-small text-muted">' + (entry.waiting ? 'Kept on this phone. It sends when the signal is back.' : 'Other hikers see it on the trail now.') + '</p>' +
+    el.innerHTML = '<p class="text-body font-semibold">' + esc(t('sent.title', { cond: tx('cond.' + cond.id + '.label', cond.label), stop: stop.name })) + '</p>' +
+      '<p class="mt-0.5 text-small text-muted">' + esc(entry.waiting ? t('sent.waiting') : t('sent.live')) + '</p>' +
       '<div class="mt-3 flex flex-wrap items-center gap-2">' +
-      '<button type="button" class="btn-secondary" data-act="photo">' + iconSvg('camera', 'h-5 w-5') + 'Add photo</button>' +
-      '<button type="button" class="btn-secondary" data-act="note">' + iconSvg('note', 'h-5 w-5') + 'Add note</button>' +
-      '<button type="button" class="btn-text" data-act="undo">Undo</button></div>';
+      '<button type="button" class="btn-secondary" data-act="photo">' + iconSvg('camera', 'h-5 w-5') + esc(t('act.photo')) + '</button>' +
+      '<button type="button" class="btn-secondary" data-act="note">' + iconSvg('note', 'h-5 w-5') + esc(t('act.note')) + '</button>' +
+      '<button type="button" class="btn-text" data-act="undo">' + esc(t('undo')) + '</button></div>';
     el.querySelector('[data-act="photo"]').addEventListener('click', function () { addPhoto(entry); });
     el.querySelector('[data-act="note"]').addEventListener('click', function () { addNote(entry); });
     el.querySelector('[data-act="undo"]').addEventListener('click', function () { undoEntry(entry); });
@@ -636,9 +701,9 @@
       try { res = await api('/api/reports/' + entry.id, { method: 'DELETE' }); } catch (e) {}
       if (res && res.ok) {
         reports = reports.filter(function (r) { return r.id !== entry.id; });
-        kitToast('Report removed');
+        kitToast(t('toast.removed'));
       } else {
-        kitToast('Couldn\'t remove the report. Try again.');
+        kitToast(t('toast.removefail'));
         return;
       }
     } else {
@@ -661,12 +726,12 @@
     var r = entryOrReport;
     var wrap = document.createElement('div');
     wrap.className = 'flex flex-col gap-3 p-4';
-    wrap.innerHTML = '<p class="font-display text-heading">Add a note</p>' +
-      '<textarea id="note-box" class="field" rows="3" maxlength="200" placeholder="e.g. The rope is fine, the rocks are wet"></textarea>' +
-      '<p class="text-small text-muted"><span id="note-count">0</span> of 200 characters</p>' +
+    wrap.innerHTML = '<p class="font-display text-heading">' + esc(t('note.title')) + '</p>' +
+      '<textarea id="note-box" class="field" rows="3" maxlength="200" placeholder="' + esc(t('note.ph')) + '"></textarea>' +
+      '<p class="text-small text-muted"><span id="note-count">0</span> ' + esc(t('note.count', { n: 0 }).replace(/^0 /, '')) + '</p>' +
       '<div class="flex justify-end gap-2">' +
-      '<button type="button" class="btn-secondary" data-close>Cancel</button>' +
-      '<button type="button" class="btn-primary" data-save>Save note</button></div>';
+      '<button type="button" class="btn-secondary" data-close>' + esc(t('cancel')) + '</button>' +
+      '<button type="button" class="btn-primary" data-save>' + esc(t('note.save')) + '</button></div>';
     var box = wrap.querySelector('#note-box');
     var count = wrap.querySelector('#note-count');
     box.value = r.note || '';
@@ -702,7 +767,7 @@
       ov[r.id] = Object.assign({}, ov[r.id], { note: text });
       lsSet('overrides', ov);
       renderReportsAndTrail();
-      kitToast('Note added');
+      kitToast(t('toast.note'));
       return;
     }
     api('/api/reports/' + r.id, { method: 'PATCH', body: { note: text } }).then(function (res) {
@@ -710,9 +775,9 @@
         var live = null;
         reports.forEach(function (x) { if (x.id === r.id) live = x; });
         if (live) live.note = res.data.report.note;
-        kitToast('Note added');
+        kitToast(t('toast.note'));
       } else {
-        kitToast('Couldn\'t add the note. Try again.');
+        kitToast(t('toast.notefail'));
       }
       renderReportsAndTrail();
     });
@@ -722,11 +787,11 @@
   function addPhoto(entryOrReport) {
     var r = entryOrReport;
     if (!navigator.onLine) {
-      kitToast('Photos need a connection. The report keeps its note.');
+      kitToast(t('toast.photo.offline'));
       return;
     }
     if (!window.usernode || typeof window.usernode.uploadFile !== 'function') {
-      kitToast('Photos are unavailable here. The report keeps its note.');
+      kitToast(t('toast.photo.na'));
       return;
     }
     photoTarget = r;
@@ -751,7 +816,7 @@
         if (r.pending) {
           // The report is still in flight; the photo rides with it once sent.
           r._photo = { url: url, id: pid };
-          kitToast('Photo attached. It sends with the report.');
+          kitToast(t('toast.photo.pending'));
           return;
         }
         if (isDemoRow(r)) {
@@ -759,7 +824,7 @@
           ov[r.id] = Object.assign({}, ov[r.id], { photoUrl: url });
           lsSet('overrides', ov);
           renderReportsAndTrail();
-          kitToast('Photo added');
+          kitToast(t('toast.photo'));
           return;
         }
         var res = await api('/api/reports/' + r.id, { method: 'PATCH', body: { photoUrl: url, photoId: pid } });
@@ -767,13 +832,13 @@
           var live = null;
           reports.forEach(function (x) { if (x.id === r.id) live = x; });
           if (live) { live.photoUrl = res.data.report.photoUrl; live.photoId = pid; }
-          kitToast('Photo added');
+          kitToast(t('toast.photo'));
         } else {
-          kitToast('Couldn\'t attach the photo. Try again.');
+          kitToast(t('toast.photofail'));
         }
         renderReportsAndTrail();
       } catch (e) {
-        kitToast('Photos are unavailable right now. The report keeps its note.');
+        kitToast(t('toast.photo.error'));
       }
     });
   }
@@ -807,7 +872,7 @@
       ov[r.id] = Object.assign({}, ov[r.id], { removed: true });
       lsSet('overrides', ov);
       renderReportsAndTrail();
-      kitToast('Report removed');
+      kitToast(t('toast.removed'));
       return;
     }
     api('/api/reports/' + r.id, { method: 'DELETE' }).then(function (res) {
@@ -818,9 +883,9 @@
           }
         } catch (e) {}
         reports = reports.filter(function (x) { return x.id !== r.id; });
-        kitToast('Report removed');
+        kitToast(t('toast.removed'));
       } else {
-        kitToast('Couldn\'t remove the report. Try again.');
+        kitToast(t('toast.removefail'));
       }
       renderReportsAndTrail();
     });
@@ -832,17 +897,17 @@
       ov[r.id] = Object.assign({}, ov[r.id], { flagged: true });
       lsSet('overrides', ov);
       renderReportsAndTrail();
-      kitToast('Flagged. It\'s hidden for you.');
+      kitToast(t('toast.flagged'));
       return;
     }
     api('/api/reports/' + r.id + '/flag', { method: 'POST' }).then(function (res) {
       if (res.ok) {
         reports = reports.filter(function (x) { return x.id !== r.id; });
-        kitToast('Flagged. It\'s hidden for you.');
+        kitToast(t('toast.flagged'));
       } else if (res.status === 400) {
-        kitToast('You can\'t flag your own report');
+        kitToast(t('toast.flagown'));
       } else {
-        kitToast('Couldn\'t flag the report. Try again.');
+        kitToast(t('toast.flagfail'));
       }
       renderReportsAndTrail();
     });
@@ -854,13 +919,13 @@
     var items;
     if (r.mine) {
       items = [
-        { label: 'Add note', handler: function () { addNote(r); } },
-        { label: 'Add photo', handler: function () { addPhoto(r); } },
-        { label: 'Remove report', destructive: true, handler: function () { removeReport(r); } },
+        { label: t('act.note'), handler: function () { addNote(r); } },
+        { label: t('act.photo'), handler: function () { addPhoto(r); } },
+        { label: t('menu.remove'), destructive: true, handler: function () { removeReport(r); } },
       ];
     } else {
       items = [
-        { label: 'Flag as wrong or inappropriate', destructive: true, handler: function () { flagReport(r); } },
+        { label: t('menu.flag'), destructive: true, handler: function () { flagReport(r); } },
       ];
     }
     rowMenu(anchorEl, null, items);
@@ -869,7 +934,7 @@
   function showPhoto(url) {
     var wrap = document.createElement('div');
     wrap.className = 'p-3';
-    wrap.innerHTML = '<img src="' + esc(url) + '" alt="Report photo" style="max-height:70vh" class="w-full rounded-lg">';
+    wrap.innerHTML = '<img src="' + esc(url) + '" alt="' + esc(t('photo.alt')) + '" style="max-height:70vh" class="w-full rounded-lg">';
     presentModal(wrap);
   }
 
@@ -877,18 +942,18 @@
     var c = COND_BY_ID[r.condition];
     var stop = STOP_BY_ID[r.stopId];
     var tone = c.tone === 'danger' ? 'danger' : 'warn';
-    var who = r.mine ? 'You' : esc(r.username);
-    var ago = r.pending ? 'just now' : M.formatAgo(nowDate().getTime() - new Date(r.createdAt).getTime());
-    var sub = who + ', ' + ago + (r.pending && r.waiting ? ' · Waiting for signal' : '');
+    var who = r.mine ? t('who.you') : esc(r.username);
+    var ago = r.pending ? I18N.ago(LANG, 0) : I18N.ago(LANG, nowDate().getTime() - new Date(r.createdAt).getTime());
+    var sub = who + ', ' + ago + (r.pending && r.waiting ? ' · ' + t('share.section') : '');
     return '<li class="list-row items-start" data-id="' + r.id + '">' +
       '<span class="report-icon report-icon-' + tone + '">' + iconSvg(r.condition === 'landslide' ? 'landslide' : r.condition, 'h-5 w-5') + '</span>' +
       '<div class="min-w-0 flex-1">' +
-      '<p class="text-body font-semibold">' + esc(c.label) + ' at ' + esc(stop.name) + '</p>' +
-      '<p class="text-small text-muted">' + sub + '</p>' +
+      '<p class="text-body font-semibold">' + esc(tx('cond.' + c.id + '.label', c.label)) + ' ' + esc(t('strip.at')) + ' ' + esc(stop.name) + '</p>' +
+      '<p class="text-small text-muted">' + esc(sub) + '</p>' +
       (r.note ? '<p class="mt-0.5 text-small">' + esc(r.note) + '</p>' : '') +
       '</div>' +
-      (r.photoUrl ? '<button type="button" class="report-thumb" data-photo="' + esc(r.photoUrl) + '" aria-label="Open the photo">' + iconSvg('photo', 'h-6 w-6') + '</button>' : '') +
-      '<button type="button" class="flex h-11 w-11 flex-none items-center justify-center rounded-lg text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" data-menu aria-label="Report options">' + iconSvg('dots', 'h-5 w-5') + '</button>' +
+      (r.photoUrl ? '<button type="button" class="report-thumb" data-photo="' + esc(r.photoUrl) + '" aria-label="' + esc(t('photo.open')) + '">' + iconSvg('photo', 'h-6 w-6') + '</button>' : '') +
+      '<button type="button" class="flex h-11 w-11 flex-none items-center justify-center rounded-lg text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" data-menu aria-label="' + esc(t('menu.options')) + '">' + iconSvg('dots', 'h-5 w-5') + '</button>' +
       '</li>';
   }
 
@@ -904,9 +969,9 @@
       return;
     }
     if (failed && !usingCache) {
-      ul.innerHTML = '<li class="state-error"><p class="text-body font-medium">Couldn\'t load today\'s reports.</p>' +
-        '<p class="text-small text-muted">The guide, packing list and location still work.</p>' +
-        '<button type="button" id="reports-retry" class="btn-secondary mt-1">Retry</button></li>';
+      ul.innerHTML = '<li class="state-error"><p class="text-body font-medium">' + esc(t('err.reports')) + '</p>' +
+        '<p class="text-small text-muted">' + esc(t('err.still')) + '</p>' +
+        '<button type="button" id="reports-retry" class="btn-secondary mt-1">' + esc(t('retry')) + '</button></li>';
       var rb = $('reports-retry');
       if (rb) rb.addEventListener('click', function () { loadReports(); });
       el.textContent = '';
@@ -914,16 +979,16 @@
     }
     var list = visibleReports();
     if (!list.length) {
-      ul.innerHTML = '<li class="state-empty"><p class="text-body font-medium">No reports in the last 24 hours.</p>' +
-        '<p class="text-small text-muted">Seen something on the trail? Report it.</p></li>';
+      ul.innerHTML = '<li class="state-empty"><p class="text-body font-medium">' + esc(t('reports.empty')) + '</p>' +
+        '<p class="text-small text-muted">' + esc(t('reports.empty.sub')) + '</p></li>';
       el.textContent = '';
       return;
     }
     ul.innerHTML = list.map(reportRowHtml).join('');
     if (failed && usingCache) {
-      el.textContent = 'Offline. Reports from ' + fmtClock(usingCache.at) + '.';
+      el.textContent = t('reports.offline', { time: fmtClock(usingCache.at) });
     } else {
-      el.textContent = 'Updated ' + fmtClock(usingCache ? usingCache.at : nowISO()) + '.';
+      el.textContent = t('reports.updated', { time: fmtClock(usingCache ? usingCache.at : nowISO()) });
     }
     Array.prototype.forEach.call(ul.querySelectorAll('[data-menu]'), function (btn) {
       btn.addEventListener('click', function () {
@@ -979,21 +1044,22 @@
     var total = 0, done = 0;
     var html = '';
     groups.forEach(function (g) {
-      html += '<h2 class="section-label mt-5">' + esc(g.group) + '</h2><ul class="list">';
+      html += '<h2 class="section-label mt-5">' + esc(tx('pack.group.' + g.key, g.group)) + '</h2><ul class="list">';
       g.items.forEach(function (it) {
         total++;
         var isPacked = !!packedSet[it.id];
         if (isPacked) done++;
+        var itLabel = tx('pack.' + it.id + '.label', it.label);
         html += '<li class="list-row' + (isPacked ? ' bg-raised/40' : '') + '">' +
-          '<input type="checkbox" class="pack-box mt-0.5 h-5 w-5 flex-none accent-accent" data-pack="' + it.id + '"' + (isPacked ? ' checked' : '') + ' aria-label="' + esc(it.label) + '">' +
-          '<div class="min-w-0 flex-1"><p class="text-body' + (isPacked ? ' line-through decoration-line' : '') + '">' + esc(it.label) + '</p>' +
-          '<p class="text-small text-muted">' + esc(it.note) + '</p></div>' +
+          '<input type="checkbox" class="pack-box mt-0.5 h-5 w-5 flex-none accent-accent" data-pack="' + it.id + '"' + (isPacked ? ' checked' : '') + ' aria-label="' + esc(itLabel) + '">' +
+          '<div class="min-w-0 flex-1"><p class="text-body' + (isPacked ? ' line-through decoration-line' : '') + '">' + esc(itLabel) + '</p>' +
+          '<p class="text-small text-muted">' + esc(tx('pack.' + it.id + '.note', it.note)) + '</p></div>' +
           '<span class="flex-none text-small text-muted">× ' + it.qty + (it.unit ? ' ' + it.unit : '') + '</span></li>';
       });
       html += '</ul>';
     });
     $('packing-groups').innerHTML = html;
-    $('packed-count').textContent = done + ' of ' + total + ' packed';
+    $('packed-count').textContent = t('pack.count', { done: done, total: total });
     Array.prototype.forEach.call(document.querySelectorAll('.pack-box'), function (box) {
       box.addEventListener('change', function () {
         var id = box.getAttribute('data-pack');
@@ -1021,24 +1087,24 @@
       try {
         if (window.unNative && typeof unNative.alert === 'function') {
           unNative.alert({
-            title: 'Start over?',
-            message: 'This clears every packed tick. The list stays.',
+            title: t('reset.title'),
+            message: t('reset.msg'),
             buttons: [
-              { label: 'Cancel', style: 'cancel' },
-              { label: 'Start over', style: 'destructive', handler: function () { resetPacking(); } },
+              { label: t('cancel'), style: 'cancel' },
+              { label: t('pack.reset'), style: 'destructive', handler: function () { resetPacking(); } },
             ],
           });
           return;
         }
       } catch (e) {}
-      if (window.confirm('Start over? This clears every packed tick. The list stays.')) resetPacking();
+      if (window.confirm(t('reset.title') + ' ' + t('reset.msg'))) resetPacking();
     });
   }
   function resetPacking() {
     packing.packed = [];
     savePacking();
     renderPacking();
-    kitToast('List cleared');
+    kitToast(t('toast.cleared'));
   }
 
   // ── Location tab ───────────────────────────────────────────────────────
@@ -1049,20 +1115,20 @@
     var n = M.nearestStop(loc.lat, loc.lng);
     var d = Math.round(n.meters / 10) * 10;
     if (n.meters > 2000) {
-      return 'About ' + (n.meters / 1000).toFixed(1) + ' km from the route';
+      return t('loc.far', { km: fmtKm(n.meters / 1000) });
     }
-    return 'About ' + d + ' m from ' + n.stop.name + ', ' + fmtM(n.stop.elevM) + ' m';
+    return t('loc.near', { d: d, name: n.stop.name, elev: fmtM(n.stop.elevM) });
   }
   function renderLocation() {
     var loc = lsGet('location', null);
     var body = $('loc-body');
     if (loc) {
-      var acc = loc.accuracy ? ' (within ' + Math.round(loc.accuracy) + ' m)' : '';
+      var acc = loc.accuracy ? t('loc.within', { m: Math.round(loc.accuracy) }) : '';
       body.innerHTML = '<p class="font-semibold tabular-nums">' + loc.lat.toFixed(5) + ', ' + loc.lng.toFixed(5) + esc(acc) + '</p>' +
-        '<p class="mt-0.5 text-small text-muted">' + nearestLine(loc) + ' · taken at ' + fmtClock(loc.at) + '</p>' +
-        (autoLocOn ? '<p class="mt-0.5 text-small text-muted">Updates on its own about every 20 minutes while Mountain Trail is open.</p>' : '');
+        '<p class="mt-0.5 text-small text-muted">' + esc(nearestLine(loc)) + esc(t('loc.taken', { time: fmtClock(loc.at) })) + '</p>' +
+        (autoLocOn ? '<p class="mt-0.5 text-small text-muted">' + esc(t('loc.auto')) + '</p>' : '');
     } else {
-      body.innerHTML = '<p class="text-body text-muted">No location yet. Tap Update my location to take one.</p>';
+      body.innerHTML = '<p class="text-body text-muted">' + esc(t('loc.none')) + '</p>';
     }
     renderLocSync();
     $('coords-copy').hidden = !loc;
@@ -1079,17 +1145,16 @@
     var html = null;
     if (loc && loc.clientId) {
       if (locSending === loc.clientId) {
-        html = iconSvg('clock', 'h-4 w-4') + ' Sending your location…';
+        html = iconSvg('clock', 'h-4 w-4') + ' ' + esc(t('loc.sending'));
       } else if (loc.sentAt) {
-        html = '<span class="text-accent">' + iconSvg('check', 'h-4 w-4') + '</span> Sent to Mountain Trail at ' +
-          fmtClock(loc.sentAt) + '. Not shown to other hikers.';
+        html = '<span class="text-accent">' + iconSvg('check', 'h-4 w-4') + '</span> ' + esc(t('loc.sent', { time: fmtClock(loc.sentAt) }));
       } else if (loc.sendFailed) {
-        html = iconSvg('warning', 'h-4 w-4') + ' This location couldn\'t be sent. Tap Update my location to try again.';
+        html = iconSvg('warning', 'h-4 w-4') + ' ' + esc(t('loc.sendfail'));
       } else {
         var queued = false;
         queueAll().forEach(function (e) { if (e.kind === 'location' && e.clientId === loc.clientId) queued = true; });
         if (queued) {
-          html = iconSvg('clock', 'h-4 w-4') + ' Not sent yet. Kept on this phone, it sends when the signal is back.';
+          html = iconSvg('clock', 'h-4 w-4') + ' ' + esc(t('loc.queued'));
         }
       }
     }
@@ -1153,25 +1218,31 @@
   function fmtWhen(iso) {
     var d = new Date(iso);
     if (!isFinite(d.getTime())) return '';
-    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    var months = I18N.months(LANG);
     var h = d.getHours(), m = d.getMinutes();
-    return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m + ' on ' + d.getDate() + ' ' + months[d.getMonth()];
+    var time = (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+    var date = d.getDate() + ' ' + months[d.getMonth()];
+    return LANG === 'id' ? 'pukul ' + time + ', ' + date : time + ' on ' + date;
   }
   function buildMessage() {
     var loc = lsGet('location', null);
     var name = ($('name-field').value || '').trim();
     var contact = ($('contact-field').value || '').trim();
     var parts = [];
-    parts.push('This is ' + (name || 'a hiker') + ' on ' + MOUNTAIN.name + ' (Cibodas route).');
+    parts.push(t('msg.who', { name: name || t('msg.hiker') }));
     if (loc) {
-      parts.push('My last location, ' + fmtWhen(loc.at) + ': ' + loc.lat.toFixed(5) + ', ' + loc.lng.toFixed(5) +
-        (loc.accuracy ? ' (within ' + Math.round(loc.accuracy) + ' m)' : '') + ', ' + nearestLine(loc) + '.');
-      parts.push('Map: https://www.google.com/maps?q=' + loc.lat.toFixed(5) + ',' + loc.lng.toFixed(5));
+      parts.push(t('msg.loc', {
+        when: fmtWhen(loc.at),
+        coords: loc.lat.toFixed(5) + ', ' + loc.lng.toFixed(5),
+        acc: loc.accuracy ? t('loc.within', { m: Math.round(loc.accuracy) }) : '',
+        near: nearestLine(loc),
+      }));
+      parts.push(t('msg.map', { url: 'https://www.google.com/maps?q=' + loc.lat.toFixed(5) + ',' + loc.lng.toFixed(5) }));
     } else {
-      parts.push('Location not found yet.');
+      parts.push(t('msg.noloc'));
     }
-    if (contact) parts.push('Basecamp Cibodas contact: ' + contact + '.');
-    parts.push('Indonesia emergency number: 112.');
+    if (contact) parts.push(t('msg.contact', { contact: contact }));
+    parts.push(t('msg.emergency'));
     return parts.join(' ');
   }
   function contactValue() {
@@ -1223,7 +1294,7 @@
       li.appendChild(body);
       var title = document.createElement('p');
       title.className = 'text-body';
-      title.textContent = 'Message from ' + fmtWhen(entry.at);
+      title.textContent = t('share.from', { when: fmtWhen(entry.at) });
       body.appendChild(title);
       if (entry.coords) {
         var coords = document.createElement('p');
@@ -1237,13 +1308,13 @@
       wa.className = 'btn-secondary';
       wa.target = '_blank';
       wa.rel = 'noopener';
-      wa.setAttribute('aria-label', 'Send by WhatsApp');
+      wa.setAttribute('aria-label', t('share.wa'));
       wa.textContent = 'WhatsApp';
       wa.href = S.whatsappUrl(entry.text, contact);
       wa.addEventListener('click', function (e) {
         if (!navigator.onLine) {
           e.preventDefault();
-          kitToast('Still no signal. It stays in Waiting for signal.');
+          kitToast(t('toast.nosignal'));
           return;
         }
         setTimeout(function () { shareQueueRemove(entry.id); onChange(); }, 0);
@@ -1252,7 +1323,7 @@
       sms.className = 'btn-secondary';
       sms.target = '_blank';
       sms.rel = 'noopener';
-      sms.setAttribute('aria-label', 'Send by SMS');
+      sms.setAttribute('aria-label', t('share.sms'));
       sms.textContent = 'SMS';
       sms.href = S.smsUrl(entry.text, contact);
       sms.addEventListener('click', function () {
@@ -1261,7 +1332,7 @@
       var rm = document.createElement('button');
       rm.type = 'button';
       rm.className = 'btn-secondary';
-      rm.textContent = 'Remove';
+      rm.textContent = t('share.remove');
       rm.addEventListener('click', function () {
         shareQueueRemove(entry.id);
         onChange();
@@ -1281,7 +1352,7 @@
     wrap.className = 'flex flex-col gap-3 p-4';
     var h = document.createElement('h2');
     h.className = 'font-display text-heading';
-    h.textContent = 'Back online';
+    h.textContent = t('share.back');
     wrap.appendChild(h);
     var p = document.createElement('p');
     p.className = 'text-body text-muted';
@@ -1297,8 +1368,8 @@
     shareQueueRefreshing = function () {
       var q = shareQueueAll();
       p.textContent = q.length === 1
-        ? 'A location message you saved with no signal is ready to send.'
-        : q.length + ' location messages you saved with no signal are ready to send.';
+        ? tn('share.ready', 1)
+        : tn('share.ready', q.length);
       ul.textContent = '';
       shareQueueRows(function () {
         renderShareQueue();
@@ -1348,25 +1419,25 @@
         try {
           var r = await window.usernode.requestPermission('geolocation');
           if (r && r.state !== 'granted') {
-            status.textContent = 'Location permission is off for Mountain Trail. Turn it on in Homeroom’s settings for this app.';
+            status.textContent = t('loc.perm');
             return;
           }
           if (r && r.active === false) return; // granted; the frame reloads
         } catch (e) {}
       }
       if (!('geolocation' in navigator)) {
-        status.textContent = 'This device can\'t read a position.';
+        status.textContent = t('loc.nodevice');
         return;
       }
-      status.textContent = 'Finding your position…';
+      status.textContent = t('loc.finding');
       takeFix(function () {
         status.textContent = '';
         renderLocation();
         buildPicker();
         renderPickerHint();
-        kitToast('Location updated');
+        kitToast(t('toast.loc'));
       }, function () {
-        status.textContent = 'Couldn\'t find your position. Try again in the open.';
+        status.textContent = t('loc.findfail');
       });
     });
     async function autoLocationTick() {
@@ -1418,7 +1489,7 @@
     $('copy-btn').addEventListener('click', function () { copyMessage(buildMessage()); });
     $('coords-copy').addEventListener('click', function () {
       var loc = lsGet('location', null);
-      if (loc) copyMessage(S.coordsLine(loc.lat, loc.lng), 'Coordinates copied');
+      if (loc) copyMessage(S.coordsLine(loc.lat, loc.lng), t('toast.coords'));
     });
     // Offline, WhatsApp cannot open: keep the message on the phone instead.
     // Online, the anchor opens wa.me as normal.
@@ -1433,14 +1504,14 @@
           at: nowISO(),
         });
         renderShareQueue();
-        kitToast('No signal. Saved to send when you\'re back online.');
+        kitToast(t('toast.saved.offline'));
       }
     });
     autoLocationTick();
     setInterval(autoLocationTick, 60000);
   }
   async function copyMessage(text, doneMsg) {
-    var done = doneMsg || 'Message copied';
+    var done = doneMsg || t('toast.copied');
     try {
       await navigator.clipboard.writeText(text);
       kitToast(done);
@@ -1455,7 +1526,7 @@
       ta.remove();
       kitToast(done);
     } catch (e) {
-      kitToast('Couldn\'t copy. Select the message text yourself.');
+      kitToast(t('toast.copyfail'));
     }
   }
 
@@ -1490,6 +1561,9 @@
 
   // ── Boot ───────────────────────────────────────────────────────────────
   async function boot() {
+    applyStaticText();
+    renderLangButtons();
+    wireLang();
     picker = $('stop-picker');
     // The guide is part of the app, so it renders from trail-data at once,
     // before anything waits on the network: header, profile and all nine
@@ -1516,15 +1590,15 @@
     renderLocation();
     renderShareQueue();
     if (navigator.onLine && shareQueueAll().length) {
-      kitToast('A saved location message is waiting to send. See Location.');
+      kitToast(t('toast.queued'));
     }
     renderReportsAndTrail();
     renderPickerHint();
     TABS.forEach(function (t) {
       $('tabbtn-' + t).addEventListener('click', function () { switchTab(t); });
     });
-    var t = tabFromHash() || lsGet('tab', null) || 'trail';
-    switchTab(t);
+    var startTab = tabFromHash() || lsGet('tab', null) || 'trail';
+    switchTab(startTab);
     Array.prototype.forEach.call(document.querySelectorAll('.condition-button'), function (btn) {
       btn.addEventListener('click', function () { sendReport(btn.getAttribute('data-cond')); });
     });
@@ -1557,5 +1631,7 @@
     '.overlay-card{width:100%;max-width:26rem;background:rgb(var(--surface));border-radius:1rem;padding:8px;max-height:80vh;overflow:auto}';
   document.head.appendChild(style);
 
-  boot();
+  boot().catch(function (e) {
+    console.error('Mountain Trail: boot failed', e && (e.stack || e.message || e));
+  });
 })();

@@ -48,10 +48,11 @@
       { id: 'spare-meal', label: 'Spare meal', note: 'One extra each, in case of a cold night', qty: n },
     ];
 
+    // key: stable id for the group's name, so i18n.js can translate it.
     return [
-      { group: 'Shared by the group', items: shared.filter(function (it) { return overnight || !needsNight(it.id); }) },
-      { group: 'Each person', items: each.filter(function (it) { return overnight || !needsNight(it.id); }) },
-      { group: 'Food and water', items: food },
+      { key: 'shared', group: 'Shared by the group', items: shared.filter(function (it) { return overnight || !needsNight(it.id); }) },
+      { key: 'each', group: 'Each person', items: each.filter(function (it) { return overnight || !needsNight(it.id); }) },
+      { key: 'food', group: 'Food and water', items: food },
     ];
   }
 
