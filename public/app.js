@@ -123,6 +123,11 @@
   var failed = false;
   var usingCache = null;   // { at, now, reports } when offline
   var swReady = false;
+  // A page loaded by an already-registered service worker (every visit after
+  // the first) knows the shell is cached at once, so the "Guide saved for
+  // offline use" line is up from the first frame and the header holds still
+  // while reports load.
+  if (navigator.serviceWorker && navigator.serviceWorker.controller) swReady = true;
   var expandedStop = null;
   var lastAction = null;   // the entry behind the sent note
 
@@ -1010,6 +1015,7 @@
   async function loadReports() {
     loading = true;
     failed = false;
+    renderHeader();
     renderReportsAndTrail();
     var res = null;
     try { res = await api('/api/reports'); } catch (e) {}
@@ -1569,6 +1575,7 @@
     // before anything waits on the network: header, profile and all nine
     // stops now, skeleton bars only where the reports will land.
     renderReportsAndTrail();
+    renderHeader(); // the header too, so it never shifts while reports load
     try {
       var me = await api('/api/me');
       if (me && me.ok && me.data) {
@@ -1623,10 +1630,11 @@
   }
 
   // A toast fallback and a plain-overlay fallback live here so a missing
-  // native kit still reads as the app.
+  // native kit still reads as the app. The fallback toast clears the tab
+  // bar (68 px + the safe-area inset) by 12 px, as the kit's own toast does.
   var style = document.createElement('style');
   style.textContent =
-    '.toast-fallback{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:60;background:rgb(var(--fg));color:rgb(var(--ground));padding:10px 16px;border-radius:9999px;font-size:14px;line-height:20px;max-width:90vw}' +
+    '.toast-fallback{position:fixed;left:50%;bottom:calc(80px + var(--un-safe-inset-bottom, env(safe-area-inset-bottom, 0px)));transform:translateX(-50%);z-index:60;background:rgb(var(--fg));color:rgb(var(--ground));padding:10px 16px;border-radius:9999px;font-size:14px;line-height:20px;max-width:90vw}' +
     '.overlay-fallback{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-end;justify-content:center;background:rgb(var(--fg)/0.4);padding:16px}' +
     '.overlay-card{width:100%;max-width:26rem;background:rgb(var(--surface));border-radius:1rem;padding:8px;max-height:80vh;overflow:auto}';
   document.head.appendChild(style);

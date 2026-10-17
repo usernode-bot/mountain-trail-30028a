@@ -36,6 +36,12 @@
     --warn: 156 90 0;         /* trail warning: slippery, no water, fog */
     --on-warn: 255 255 255;
     --water: 22 98 160;       /* map blue for water sources */
+
+    /* How much bottom chrome the app's own tab bar takes up (4 px + the
+       52 px tabs + 12 px, plus the home-indicator inset the platform
+       forwards). The native kit's toast reads this and rests 16 px above
+       it, so feedback never sits on the tab bar. Same in the dark look. */
+    --un-toast-inset-bottom: calc(68px + var(--un-safe-inset-bottom, env(safe-area-inset-bottom, 0px)));
   }
   .dark {
     --ground: 16 20 17;
