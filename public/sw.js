@@ -13,6 +13,7 @@ var PRECACHE = [
   '/app.js',
   '/trail-data.js',
   '/packing.js',
+  '/status.js',
   '/share-links.js',
 ];
 

@@ -12,22 +12,70 @@
   'use strict';
 
   var MOUNTAIN = {
+    id: 'gede-pangrango',
     name: 'Gede Pangrango',
     route: 'Cibodas route to Puncak Gede',
     summitM: 2958,
     lengthKm: 9.6,
     climbM: 1683,
     hoursUp: '5 to 7',
+    hoursUpMin: 5,
+    hoursUpMax: 7,
+
+    /*
+     * Curated mountain state, updated with app releases (the platform
+     * offers no live source and no editor role). Every block carries
+     * updatedAt / checkedAt / verified so the UI can say how fresh each
+     * fact is and show "not verified" until a person confirms the figures
+     * against the park's official pages.
+     */
+    status: {
+      level: 'open', // 'open' | 'limited' | 'closed'
+      reason: null, // 'weather' | 'fire' | 'eruption' | 'maintenance' | null
+      updatedAt: '2026-10-15T00:00:00Z',
+      checkedAt: '2026-10-15T00:00:00Z',
+      verified: false,
+    },
+    permits: {
+      booking: 'online', // 'online' | 'onsite' | 'none'
+      bookingUrl: 'https://simaksi.gnpgede.com/',
+      quotaDaily: 1500,
+      feeWeekdayIdr: 25000,
+      feeWeekendIdr: 45000,
+      requirements: ['health-letter', 'id'],
+      minGroupSize: 3,
+      checkedAt: '2026-10-15T00:00:00Z',
+      verified: false,
+    },
+    // Curated 3-day summit forecast, one entry per forecast day. Day
+    // meaning (today / tomorrow / the day after) is decided by the client
+    // from index, so the data never reads as stale on an old date.
+    weather: {
+      updatedAt: '2026-10-15T00:00:00Z',
+      checkedAt: '2026-10-15T00:00:00Z',
+      verified: false,
+      basecamp: { tempC: 18, windKmh: 8, rainPct: 40 },
+      summit: { tempC: 7, windKmh: 25, rainPct: 55 },
+      days: [
+        { date: null, tempHighC: 9, tempLowC: 4, windKmh: 30, rainPct: 60 },
+        { date: null, tempHighC: 9, tempLowC: 4, windKmh: 45, rainPct: 80 },
+        { date: null, tempHighC: 10, tempLowC: 5, windKmh: 20, rainPct: 45 },
+      ],
+    },
   };
 
   // tone: 'warn' (amber) for conditions that slow you down, 'danger' (red)
   // for a blocked path. severity decides which warning the status strip
-  // shows first: landslide 4, heavy fog 3, no water 2, slippery 1.
+  // shows first, and every severity is unique: landslide 7, fallen tree 6,
+  // extreme weather 5, heavy fog 4, wildlife 3, no water 2, slippery 1.
   var CONDITIONS = [
     { id: 'slippery', label: 'Slippery', hint: 'Wet rock or mud', tone: 'warn', severity: 1 },
     { id: 'no-water', label: 'No water', hint: 'Source dry or barely flowing', tone: 'warn', severity: 2 },
-    { id: 'heavy-fog', label: 'Heavy fog', hint: "Can't see the next marker", tone: 'warn', severity: 3 },
-    { id: 'landslide', label: 'Landslide', hint: 'Path buried or broken', tone: 'danger', severity: 4 },
+    { id: 'wildlife', label: 'Wildlife', hint: 'Unusual animals near the path', tone: 'warn', severity: 3 },
+    { id: 'heavy-fog', label: 'Heavy fog', hint: "Can't see the next marker", tone: 'warn', severity: 4 },
+    { id: 'extreme-weather', label: 'Extreme weather', hint: 'Heavy rain or strong wind', tone: 'warn', severity: 5 },
+    { id: 'fallen-tree', label: 'Fallen tree', hint: 'Trunk blocking the path', tone: 'danger', severity: 6 },
+    { id: 'landslide', label: 'Landslide', hint: 'Path buried or broken', tone: 'danger', severity: 7 },
   ];
 
   var STOPS = [

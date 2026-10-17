@@ -50,12 +50,43 @@ test('condition severities are unique and landslide is highest', () => {
   assert.equal(landslide.tone, 'danger');
 });
 
-test('the guide names the mountain and its four conditions', () => {
+test('the guide names the mountain and its seven conditions', () => {
   assert.equal(T.MOUNTAIN.name, 'Gede Pangrango');
   assert.deepEqual(
     T.CONDITIONS.map((c) => c.id).sort(),
-    ['heavy-fog', 'landslide', 'no-water', 'slippery']
+    ['extreme-weather', 'fallen-tree', 'heavy-fog', 'landslide', 'no-water', 'slippery', 'wildlife']
   );
+});
+
+test('the curated status block is a valid level with a timestamp', () => {
+  const s = T.MOUNTAIN.status;
+  assert.ok(['open', 'limited', 'closed'].includes(s.level), 'level is one of three');
+  assert.ok(!Number.isNaN(new Date(s.updatedAt).getTime()), 'updatedAt parses');
+  assert.equal(typeof s.verified, 'boolean');
+  if (s.reason) assert.ok(['weather', 'fire', 'eruption', 'maintenance'].includes(s.reason));
+});
+
+test('the permits block names the booking route and quota', () => {
+  const p = T.MOUNTAIN.permits;
+  assert.ok(['online', 'onsite', 'none'].includes(p.booking));
+  assert.ok(p.quotaDaily > 0);
+  assert.ok(p.feeWeekdayIdr > 0 && p.feeWeekendIdr >= p.feeWeekdayIdr);
+  if (p.booking === 'online') {
+    assert.ok(/^https:\/\//.test(p.bookingUrl), 'the booking site is https');
+  }
+  assert.ok(!Number.isNaN(new Date(p.checkedAt).getTime()));
+});
+
+test('the weather block carries basecamp, summit and three forecast days', () => {
+  const w = T.MOUNTAIN.weather;
+  assert.ok(Number.isFinite(w.basecamp.tempC) && Number.isFinite(w.summit.tempC));
+  assert.ok(w.summit.tempC < w.basecamp.tempC, 'the summit is colder than basecamp');
+  assert.equal(w.days.length, 3);
+  w.days.forEach((d) => {
+    assert.ok(d.tempLowC <= d.tempHighC);
+    assert.ok(d.windKmh >= 0 && d.rainPct >= 0 && d.rainPct <= 100);
+  });
+  assert.ok(!Number.isNaN(new Date(w.updatedAt).getTime()));
 });
 
 test('formatConfirms words the count and is blank for none', () => {

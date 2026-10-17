@@ -14,6 +14,7 @@
   var P = window.MT_PACKING;
   var S = window.MT_SHARE;
   var I18N = window.MT_I18N;
+  var ST = window.MT_STATUS;
   var MOUNTAIN = M.MOUNTAIN;
   var STOPS = M.STOPS;
   var STOP_BY_ID = M.STOP_BY_ID;
@@ -52,6 +53,9 @@
     landslide: '<path d="M3 20h18"/><path d="M3 20L10 6l4 7"/><circle cx="16" cy="15" r="1.6"/><circle cx="19" cy="18" r="1.2"/><circle cx="13.5" cy="17.5" r="1.2"/>',
     'no-water': '<path d="M12 3c3.5 4.5 6 7.6 6 10.5a6 6 0 0 1-12 0C6 10.6 8.5 7.5 12 3z"/><path d="M4 4l16 16"/>',
     'heavy-fog': '<path d="M8 5h9"/><path d="M4 9h16"/><path d="M3 13h14"/><path d="M6 17h15"/><path d="M9 21h8"/>',
+    wildlife: '<path d="M5 9c0-3 2.5-5 7-5s7 2 7 5-3 5-7 5-7-2-7-5z"/><path d="M12 14v3"/><path d="M8 18c1.5-1 6.5-1 8 0"/><circle cx="9" cy="8.5" r="0.75" fill="currentColor" stroke="none"/><circle cx="15" cy="8.5" r="0.75" fill="currentColor" stroke="none"/>',
+    'extreme-weather': '<path d="M5 7c2 0 2-1.5 4-1.5S11 7 13 7s2-1.5 4-1.5 2 1.5 4 1.5"/><path d="M5 12c2 0 2-1.5 4-1.5S11 12 13 12s2-1.5 4-1.5 2 1.5 4 1.5"/><path d="M5 17c2 0 2-1.5 4-1.5S11 17 13 17s2-1.5 4-1.5 2 1.5 4 1.5"/>',
+    'fallen-tree': '<path d="M4 21L20 5"/><path d="M20 5l-1.5-3"/><path d="M20 5l3 1.5"/><path d="M9 16l2 2"/><path d="M13 12l2 2"/><path d="M17 8l2 2"/>',
     check: '<path d="M5 12l5 5 9-10"/>',
     chevron: '<path d="M6 9l6 6 6-6"/>',
     camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
@@ -83,6 +87,10 @@
   function t(key, vars) { return I18N.t(LANG, key, vars); }
   function tn(key, n, vars) { return I18N.tn(LANG, key, n, vars); }
   function tx(key, english) { return I18N.tx(LANG, key, english); }
+  function fmtNum(n) { return I18N.fmtNum(LANG, n); }
+  function fmtAgo(ms) { return I18N.ago(LANG, ms); }
+  function condLabel(id) { return COND_BY_ID[id] ? tx('cond.' + id + '.label', COND_BY_ID[id].label) : id; }
+  function levelLabel(level) { return t('banner.' + level); }
   var TOKEN = '';
   var PAGE_DEMO = /[?&]demo=1/.test(location.search);
   try { TOKEN = new URLSearchParams(location.search).get('token') || ''; } catch (e) {}
@@ -154,8 +162,12 @@
     }
     var n = nowDate().getTime();
     list = list.filter(function (r) {
-      var t = new Date(r.createdAt).getTime();
-      return isFinite(t) && t <= n + 60000 && n - t < 86400000;
+      var c = new Date(r.createdAt).getTime();
+      if (!isFinite(c) || c > n + 60000) return false;
+      // A report shows for 24 hours from its creation, and every
+      // "still valid" confirmation pushes that window out again.
+      var exp = r.expiresAt ? new Date(r.expiresAt).getTime() : c + 86400000;
+      return isFinite(exp) ? n < exp : n - c < 86400000;
     });
     pending.forEach(function (p) { list.push(p); });
     list.sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
@@ -257,7 +269,7 @@
   function askForAccount() {
     try {
       if (window.usernode && typeof window.usernode.askForAccount === 'function') {
-        window.usernode.askForAccount({ action: 'report a trail condition' });
+        window.usernode.askForAccount({ action: t('account.report') });
         return;
       }
     } catch (e) {}
@@ -305,6 +317,9 @@
     renderLangButtons();
     renderHeader();
     renderReportsAndTrail();
+    renderPermits();
+    renderWeather();
+    renderNotifs();
     if (picker) { buildPicker(); renderPickerHint(); }
     if (packing) renderPacking();
     renderLocation();
@@ -365,7 +380,220 @@
     return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
   }
 
-  function renderStatus() {
+  // The official level the banner shows. In the staging demo a client-side
+    // override turns it "limited / bad weather" so the banner's warning look
+    // can be seen; the plain route keeps the shipped "open".
+    function shownStatus() {
+      var s = MOUNTAIN.status || { level: 'open', reason: null, updatedAt: null, verified: true };
+      if (demo) {
+        var o = lsGet('statusOverride', null);
+        if (o && ST.isStatusLevel(o.level)) {
+          return { level: o.level, reason: o.reason || null, updatedAt: s.updatedAt, checkedAt: s.checkedAt, verified: s.verified };
+        }
+      }
+      return s;
+    }
+    function statusSig() {
+      var s = shownStatus();
+      return s.level + ':' + (s.reason || '') + ':' + (s.updatedAt || '');
+    }
+    function quotaSig() {
+      var p = MOUNTAIN.permits;
+      return p ? (p.quotaDaily + ':' + (p.checkedAt || '')) : '';
+    }
+    function weatherSig() {
+      var w = MOUNTAIN.weather;
+      return w ? (w.updatedAt || '') : '';
+    }
+
+    // ── The official status banner: Buka / Dibuka Terbatas / Ditutup ──────
+    function renderStatusBanner() {
+      var el = $('status-banner');
+      var s = shownStatus();
+      if (!s.updatedAt) { el.hidden = true; return; }
+      el.hidden = false;
+      var tone = ST.statusTone(s.level);
+      var toneClass = tone === 'danger' ? 'status-banner-danger'
+        : (tone === 'warn' ? 'status-banner-warn' : 'status-banner-accent');
+      el.className = 'status-banner ' + toneClass + ' mt-4';
+      var icon = s.level === 'open' ? 'check' : 'warning';
+      var ago = fmtAgo(nowDate().getTime() - new Date(s.updatedAt).getTime());
+      var meta = t(s.reason ? 'banner.updated' : 'banner.checked', { ago: ago });
+      var badge = s.verified ? '' : ' <span class="badge">' + esc(t('permits.notVerified')) + '</span>';
+      el.setAttribute('role', 'status');
+      el.innerHTML = iconSvg(icon, 'status-banner-icon') +
+        '<div><p class="text-body font-semibold">' + esc(levelLabel(s.level)) +
+        (s.reason ? '<span class="text-small font-normal text-muted"> · ' + esc(t('reason.' + s.reason)) + '</span>' : '') + '</p>' +
+        '<p class="text-small text-muted">' + esc(meta) + badge + '</p></div>';
+    }
+
+    // ── Permits and quota: the curated SIMAKSI facts ──────────────────────
+    function kvRow(label, value) {
+      return '<div class="kv-row"><span class="kv-label">' + label + '</span><span class="kv-value">' + value + '</span></div>';
+    }
+    function renderPermits() {
+      var el = $('permits-card');
+      var p = MOUNTAIN.permits;
+      if (!p) { el.innerHTML = ''; return; }
+      var titleKey = p.booking === 'online' ? 'permits.onlineTitle'
+        : (p.booking === 'onsite' ? 'permits.onsiteTitle' : 'permits.noneTitle');
+      var reqs = (p.requirements || []).map(function (r) { return esc(t('req.' + r)); });
+      if (p.minGroupSize) reqs.push(esc(t('permits.minGroup', { n: p.minGroupSize })));
+      var html = '<p class="text-body font-semibold">' + esc(t(titleKey)) + '</p>' +
+        '<div class="mt-1 divide-y divide-line">' +
+        kvRow(esc(t('permits.quota')), esc(t('permits.quotaValue', { n: fmtNum(p.quotaDaily) }))) +
+        kvRow(esc(t('permits.fee')), esc(t('permits.feeValue', { wd: fmtNum(p.feeWeekdayIdr), we: fmtNum(p.feeWeekendIdr) }))) +
+        kvRow(esc(t('permits.reqs')), reqs.join(', ')) +
+        '</div>';
+      if (p.booking === 'online' && p.bookingUrl) {
+        html += '<a class="btn-secondary mt-3 w-full" href="' + esc(p.bookingUrl) + '" target="_blank" rel="noopener">' + esc(t('permits.openSite')) + '</a>';
+      }
+      var checked = p.checkedAt ? esc(t('banner.checked', { ago: fmtAgo(nowDate().getTime() - new Date(p.checkedAt).getTime()) })) : '';
+      if (!p.verified) checked += ' <span class="badge">' + esc(t('permits.notVerified')) + '</span>';
+      html += '<p class="mt-3 text-small text-muted">' + checked + '</p>';
+      el.innerHTML = html;
+    }
+
+    // ── Summit weather: curated 3-day forecast, warnings highlighted ──────
+    function forecastDays(now) {
+      var locale = LANG === 'id' ? 'id-ID' : 'en-US';
+      var out = [];
+      for (var i = 0; i < 3; i++) {
+        var d = new Date(now.getTime() + i * 86400000);
+        var name = i === 0 ? t('weather.today')
+          : (i === 1 ? t('weather.tomorrow')
+            : new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(d));
+        out.push({ name: name, when: name });
+      }
+      return out;
+    }
+    function renderWeather() {
+      var el = $('weather-card');
+      var w = MOUNTAIN.weather;
+      if (!w || !Array.isArray(w.days)) { el.innerHTML = ''; return; }
+      var climbDate = lsGet('climbDate', null);
+      var now = nowDate();
+      var warnings = ST.weatherWarnings(w, climbDate, now, (packing && packing.days) || 1);
+      function cell(name, s) {
+        return '<div class="wx-cell"><p class="text-small text-muted">' + esc(name) + '</p>' +
+          '<p class="mt-0.5 text-body font-semibold">' + s.tempC + ' °C</p>' +
+          '<p class="mt-0.5 text-small text-muted">' + esc(t('weather.windKmh', { w: s.windKmh })) + '</p>' +
+          '<p class="text-small text-muted">' + esc(t('weather.rainPct', { p: s.rainPct })) + '</p></div>';
+      }
+      var dayNames = forecastDays(now);
+      function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+      var days = w.days.slice(0, 3).map(function (d, i) {
+        var warned = warnings.some(function (x) { return x.index === i; });
+        return '<div class="wx-day' + (warned ? ' wx-day-warn' : '') + '">' +
+          '<p class="wx-day-name">' + esc(cap(dayNames[i].name)) + '</p>' +
+          '<p class="mt-0.5 text-body font-semibold">' + d.tempLowC + '–' + d.tempHighC + ' °C</p>' +
+          '<p class="text-small text-muted">' + esc(t('weather.windKmh', { w: d.windKmh })) + '</p>' +
+          '<p class="text-small text-muted">' + esc(t('weather.rainPct', { p: d.rainPct })) + '</p></div>';
+      }).join('');
+      var alerts = '';
+      warnings.forEach(function (x) {
+        var d = w.days[x.index] || {};
+        var when = dayNames[x.index] ? dayNames[x.index].when : '';
+        (x.reasons || []).forEach(function (r) {
+          var text = r === 'wind'
+            ? t('weather.alert.wind', { w: d.windKmh, when: when })
+            : t('weather.alert.rain', { p: d.rainPct, when: when });
+          alerts += '<p class="wx-alert">' + iconSvg('warning', 'wx-alert-icon') + '<span>' + esc(text) + '</span></p>';
+        });
+      });
+      var html = '<div class="wx-grid">' + cell(t('weather.basecamp'), w.basecamp || {}) + cell(t('weather.summit'), w.summit || {}) + '</div>' +
+        '<p class="mt-3 text-small font-medium">' + esc(t('weather.forecast')) + '</p>' +
+        '<div class="wx-days">' + days + '</div>' +
+        alerts +
+        '<label for="climb-date" class="mb-1 mt-3 block text-small font-medium">' + esc(t('weather.climbDate')) + '</label>' +
+        '<input type="date" id="climb-date" class="field" value="' + esc(climbDate || '') + '">' +
+        '<p class="mt-1 text-small text-muted">' + esc(t('weather.climbHint')) + '</p>';
+      var updated = w.updatedAt ? esc(t('weather.updated', { ago: fmtAgo(now.getTime() - new Date(w.updatedAt).getTime()) })) : '';
+      if (!w.verified) updated += ' <span class="badge">' + esc(t('permits.notVerified')) + '</span>';
+      html += '<p class="mt-3 text-small text-muted">' + updated + '</p>' +
+        '<p class="mt-0.5 text-small text-muted">' + esc(t('weather.curated')) + '</p>';
+      el.innerHTML = html;
+      var input = $('climb-date');
+      input.addEventListener('change', function () {
+        lsSet('climbDate', input.value || null);
+        renderWeather();
+        renderNotifs();
+      });
+    }
+
+    // ── Notifications: a device-only list for followed mountains ──────────
+    function checkForNotifs() {
+      var follows = lsGet('follows', []);
+      if (follows.indexOf(MOUNTAIN.id) < 0) return;
+      var seen = lsGet('seen', null);
+      var now = nowDate();
+      var entries = [];
+      if (seen) {
+        if (seen.statusSig !== statusSig()) {
+          entries.push({ key: 'notif.statusChanged', params: { level: shownStatus().level } });
+        }
+        if (seen.quotaSig !== quotaSig()) entries.push({ key: 'notif.quotaChanged' });
+        var warned = ST.weatherWarnings(MOUNTAIN.weather, lsGet('climbDate', null), now, (packing && packing.days) || 1).length > 0;
+        if (seen.weatherSig !== weatherSig() && warned) entries.push({ key: 'notif.weatherWarning' });
+        var rn = 'n:' + visibleReports().length;
+        // A 'seed' snapshot is the baseline the demo seeds to; it starts
+        // counting from there instead of announcing everything as new.
+        if (seen.reportsSig && seen.reportsSig !== 'seed' && seen.reportsSig !== rn) {
+          var prev = Number(String(seen.reportsSig).slice(2)) || 0;
+          var added = Math.max(1, (visibleReports().length - prev));
+          entries.push(added === 1 ? { key: 'notif.newReportsOne' } : { key: 'notif.newReportsMany', params: { n: added } });
+        }
+        if (seen.reportsSig === 'seed') seen.reportsSig = rn;
+      }
+      var notifs = lsGet('notifs', []);
+      entries.forEach(function (e) {
+        var dedupe = e.key + ':' + JSON.stringify(e.params || {});
+        var exists = notifs.some(function (n) { return n.key + ':' + JSON.stringify(n.params || {}) === dedupe; });
+        if (!exists) notifs.unshift({ key: e.key, params: e.params || {}, at: now.toISOString(), read: false });
+      });
+      if (entries.length) lsSet('notifs', notifs.slice(0, 10));
+      lsSet('seen', { statusSig: statusSig(), quotaSig: quotaSig(), weatherSig: weatherSig(), reportsSig: seen && seen.reportsSig ? seen.reportsSig : 'n:' + visibleReports().length });
+      renderNotifs();
+    }
+    // Notification text is re-translated at render; the level in a
+    // statusChanged entry is stored as the raw level, not a label.
+    function notifText(n) {
+      var params = Object.assign({}, n.params);
+      if (n.key === 'notif.statusChanged' && params.level) params.level = levelLabel(params.level);
+      return t(n.key, params);
+    }
+    function renderNotifs() {
+      var follows = lsGet('follows', []);
+      var toggle = $('follow-toggle');
+      if (toggle) toggle.checked = follows.indexOf(MOUNTAIN.id) >= 0;
+      var notifs = lsGet('notifs', []);
+      var unread = notifs.filter(function (n) { return !n.read; }).length;
+      var unreadEl = $('notif-unread');
+      if (unread > 0) {
+        unreadEl.hidden = false;
+        unreadEl.textContent = t('notif.unread', { n: unread });
+      } else {
+        unreadEl.hidden = true;
+        unreadEl.textContent = '';
+      }
+      var ul = $('notif-list');
+      var btn = $('notif-read');
+      ul.hidden = false;
+      if (!notifs.length) {
+        ul.innerHTML = '<li class="state-empty"><p class="text-small text-muted">' + esc(t('notif.empty')) + '</p></li>';
+        btn.hidden = true;
+        return;
+      }
+      ul.innerHTML = notifs.map(function (n) {
+        return '<li class="list-row items-start">' +
+          '<span class="report-icon report-icon-warn">' + iconSvg('warning', 'h-4 w-4') + '</span>' +
+          '<div class="min-w-0 flex-1"><p class="text-body' + (n.read ? '' : ' font-medium') + '">' + esc(notifText(n)) + '</p>' +
+          '<p class="text-small text-muted">' + esc(fmtAgo(nowDate().getTime() - new Date(n.at).getTime())) + '</p></div></li>';
+      }).join('');
+      btn.hidden = unread === 0;
+    }
+
+    function renderStatus() {
     var el = $('status-strip');
     el.className = 'status-strip mt-4';
     el.onclick = null;
@@ -415,8 +643,8 @@
     if (!worst.mine && !worst.pending) {
       confirmBtn = '<button type="button" class="btn-secondary mt-2" data-confirm' +
         (worst.confirmedByMe
-          ? ' aria-pressed="true" aria-disabled="true">' + iconSvg('check', 'h-5 w-5 text-accent') + 'Masih berlaku</button>'
-          : '>Masih berlaku</button>');
+          ? ' aria-pressed="true" aria-disabled="true">' + iconSvg('check', 'h-5 w-5 text-accent') + esc(t('confirm.stillValid')) + '</button>'
+          : '>' + esc(t('confirm.stillValid')) + '</button>');
     }
     el.innerHTML = iconSvg(worst.condition === 'landslide' ? 'landslide' : worst.condition, 'status-strip-icon') +
       '<div class="min-w-0 flex-1">' +
@@ -424,7 +652,7 @@
       '<span class="text-body font-medium">' + esc(tx('cond.' + cond.id + '.label', cond.label)) + ' ' + esc(t('strip.at')) + ' ' + esc(STOP_BY_ID[worst.stopId].name) + '</span></button>' +
       '<p class="text-small text-muted">' + esc(t('strip.reported', { ago: I18N.ago(LANG, nowDate().getTime() - new Date(worst.createdAt).getTime()) })) +
       (others > 0 ? '. ' + esc(tn('reports.more', others)) : '') + '.</p>' +
-      (worst.confirms > 0 ? '<p class="text-small text-muted">' + esc(M.formatConfirms(worst.confirms)) + '</p>' : '') +
+      (worst.confirms > 0 ? '<p class="text-small text-muted">' + esc(tn('confirm.count', worst.confirms)) + '</p>' : '') +
       confirmBtn + '</div>' +
       (worst.photoUrl
         ? '<button type="button" class="status-strip-photo" data-photo="' + esc(worst.photoUrl) + '" aria-label="Open the photo">' +
@@ -615,7 +843,7 @@
         '<span class="report-icon report-icon-' + (c.tone === 'danger' ? 'danger' : 'warn') + '">' + iconSvg(r.condition === 'landslide' ? 'landslide' : r.condition, 'h-4 w-4') + '</span>' +
         '<div class="min-w-0 flex-1"><p class="text-body font-medium">' + esc(tx('cond.' + c.id + '.label', c.label)) + '</p>' +
         '<p class="text-small text-muted">' + (r.mine ? esc(t('who.you')) : esc(r.username)) + ', ' + esc(I18N.ago(LANG, nowDate().getTime() - new Date(r.createdAt).getTime())) + '</p>' +
-        (r.confirms > 0 ? '<p class="text-small text-muted">' + esc(M.formatConfirms(r.confirms)) + '</p>' : '') +
+        (r.confirms > 0 ? '<p class="text-small text-muted">' + esc(tn('confirm.count', r.confirms)) + '</p>' : '') +
         (r.note ? '<p class="mt-0.5 text-small">' + esc(r.note) + '</p>' : '') + '</div></li>';
     }).join('');
     return '<p class="mt-2 text-body">' + esc(tx('stop.' + s.id + '.detail', s.detail)) + '</p>' +
@@ -779,7 +1007,6 @@
 
   function showSentNote(entry) {
     var el = $('sent-note');
-    var cond = COND_BY_ID[entry.condition];
     var stop = STOP_BY_ID[entry.stopId];
     el.hidden = false;
     el.innerHTML = '<p class="text-body font-semibold">' + esc(t('sent.title', { cond: tx('cond.' + cond.id + '.label', cond.label), stop: stop.name })) + '</p>' +
@@ -838,7 +1065,7 @@
     var box = wrap.querySelector('#note-box');
     var count = wrap.querySelector('#note-count');
     box.value = r.note || '';
-    function upd() { count.textContent = String(box.value.length); }
+    function upd() { count.textContent = t('note.count', { n: box.value.length }); }
     box.addEventListener('input', upd);
     upd();
     wrap.querySelector('[data-close]').addEventListener('click', function () {
@@ -1021,10 +1248,12 @@
   // signal just asks to try again.
   async function confirmReport(r) {
     if (!ME.user) { askForAccount(); return; }
+    if (!navigator.onLine) { kitToast(t('confirm.offline')); return; }
     if (isDemoRow(r)) {
       var dov = lsGet('overrides', {});
       dov[r.id] = Object.assign({}, dov[r.id], { confirmed: true });
       lsSet('overrides', dov);
+      kitToast(t('confirm.sent'));
       renderReportsAndTrail();
       return;
     }
@@ -1042,16 +1271,17 @@
     if (res && res.ok && res.data) {
       live.confirms = res.data.confirms;
       live.confirmedByMe = res.data.confirmedByMe !== false;
+      kitToast(t('confirm.sent'));
     } else if (res && res.status === 400) {
       live.confirmedByMe = false;
       live.confirms = prevConfirms;
-      kitToast('You can\'t confirm your own report');
+      kitToast(t('confirm.own'));
     } else if (res && res.status === 404) {
       reports = reports.filter(function (x) { return x.id !== r.id; });
     } else {
       live.confirmedByMe = false;
       live.confirms = prevConfirms;
-      kitToast('Couldn\'t confirm. Try again when you have signal.');
+      kitToast(t('confirm.fail'));
     }
     renderReportsAndTrail();
   }
@@ -1088,12 +1318,24 @@
     var who = r.mine ? t('who.you') : esc(r.username);
     var ago = r.pending ? I18N.ago(LANG, 0) : I18N.ago(LANG, nowDate().getTime() - new Date(r.createdAt).getTime());
     var sub = who + ', ' + ago + (r.pending && r.waiting ? ' · ' + t('share.section') : '');
+    var confirmLine = '';
+    if (!r.pending && !r.mine) {
+      if (r.confirmedByMe) {
+        confirmLine = '<p class="mt-1 text-small font-medium text-accent">' + esc(t('confirm.you')) + '</p>';
+      } else {
+        confirmLine = '<button type="button" class="btn-text" data-confirm="' + r.id + '">' + esc(t('confirm.stillValid')) + '</button>';
+      }
+    }
+    if (r.confirms > 0) {
+      confirmLine += '<p class="mt-0.5 text-small text-muted">' + esc(tn('confirm.count', r.confirms)) + '</p>';
+    }
     return '<li class="list-row items-start" data-id="' + r.id + '">' +
-      '<span class="report-icon report-icon-' + tone + '">' + iconSvg(r.condition === 'landslide' ? 'landslide' : r.condition, 'h-5 w-5') + '</span>' +
+      '<span class="report-icon report-icon-' + tone + '">' + iconSvg(r.condition, 'h-5 w-5') + '</span>' +
       '<div class="min-w-0 flex-1">' +
       '<p class="text-body font-semibold">' + esc(tx('cond.' + c.id + '.label', c.label)) + ' ' + esc(t('strip.at')) + ' ' + esc(stop.name) + '</p>' +
       '<p class="text-small text-muted">' + esc(sub) + '</p>' +
       (r.note ? '<p class="mt-0.5 text-small">' + esc(r.note) + '</p>' : '') +
+      confirmLine +
       '</div>' +
       (r.photoUrl ? '<button type="button" class="report-thumb" data-photo="' + esc(r.photoUrl) + '" aria-label="' + esc(t('photo.open')) + '">' + iconSvg('photo', 'h-6 w-6') + '</button>' : '') +
       '<button type="button" class="flex h-11 w-11 flex-none items-center justify-center rounded-lg text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" data-menu aria-label="' + esc(t('menu.options')) + '">' + iconSvg('dots', 'h-5 w-5') + '</button>' +
@@ -1138,18 +1380,23 @@
         reportMenu(btn, Number(btn.closest('li').getAttribute('data-id')));
       });
     });
+    Array.prototype.forEach.call(ul.querySelectorAll('[data-confirm]'), function (btn) {
+      btn.addEventListener('click', function () {
+        confirmReport(findReportById(Number(btn.getAttribute('data-confirm'))));
+      });
+    });
     Array.prototype.forEach.call(ul.querySelectorAll('[data-photo]'), function (btn) {
       btn.addEventListener('click', function () { showPhoto(btn.getAttribute('data-photo')); });
     });
   }
 
   function renderReportsAndTrail() {
+    renderStatusBanner();
     renderStatus();
     renderReports();
     renderProfile();
     renderStops();
   }
-
   async function loadReports() {
     loading = true;
     failed = false;
@@ -1173,6 +1420,7 @@
     loading = false;
     renderReportsAndTrail();
     renderHeader();
+    checkForNotifs();
     replayQueue();
   }
 
@@ -1185,6 +1433,11 @@
     var groups = P.buildPackingList({ days: packing.days, people: packing.people });
     var packedSet = {};
     (packing.packed || []).forEach(function (id) { packedSet[id] = true; });
+    var GROUP_KEY = {
+      'Shared by the group': 'group.shared',
+      'Each person': 'group.each',
+      'Food and water': 'group.food',
+    };
     var total = 0, done = 0;
     var html = '';
     groups.forEach(function (g) {
@@ -1689,7 +1942,29 @@
     });
     lsSet('name', 'Demo hiker');
     lsSet('contact', '0800 0000 000 (demo)');
+    // The demo shows the banner's warning look and a climb date in the
+    // window, so the weather warning is visible too. Seeded once; the
+    // plain route keeps the shipped "open" and no climb date.
+    lsSet('statusOverride', { level: 'limited', reason: 'weather' });
+    lsSet('follows', ['gede-pangrango']);
+    lsSet('climbDate', dayKeyOffset(1));
+    // Seeded notifications: one unread (the status change the override
+    // stands for) and one already read. The 'seen' snapshot carries
+    // reportsSig 'seed' so the first real check counts from this baseline
+    // instead of announcing every seeded report as new.
+    lsSet('notifs', [
+      { key: 'notif.statusChanged', params: { level: 'limited' }, at: new Date(nowDate().getTime() - 30 * 60000).toISOString(), read: false },
+      { key: 'notif.newReportsOne', params: {}, at: new Date(nowDate().getTime() - 3 * 3600000).toISOString(), read: true },
+    ]);
+    lsSet('seen', { statusSig: statusSig(), quotaSig: quotaSig(), weatherSig: weatherSig(), reportsSig: 'seed' });
     lsSet('seeded', true);
+  }
+  // 'YYYY-MM-DD' for now's UTC day plus n days; the climb-date input's
+  // format and status.js's day keys.
+  function dayKeyOffset(n) {
+    var d = nowDate();
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
   }
 
   // ── Offline / service worker ───────────────────────────────────────────
@@ -1731,7 +2006,10 @@
     wireLocation();
     if (demo) seedDemoShare(); // after wireLocation fills the name and contact fields
     wirePhotoInput();
+    wireNotifs();
     renderPacking();
+    renderPermits();
+    renderWeather();
     renderLocation();
     renderShareQueue();
     if (navigator.onLine && shareQueueAll().length) {
@@ -1739,8 +2017,8 @@
     }
     renderReportsAndTrail();
     renderPickerHint();
-    TABS.forEach(function (t) {
-      $('tabbtn-' + t).addEventListener('click', function () { switchTab(t); });
+    TABS.forEach(function (name) {
+      $('tabbtn-' + name).addEventListener('click', function () { switchTab(name); });
     });
     var startTab = tabFromHash() || lsGet('tab', null) || 'trail';
     switchTab(startTab);
@@ -1767,6 +2045,29 @@
     loadReports();
   }
 
+  // The Notifications controls.
+  function wireNotifs() {
+    var follow = $('follow-toggle');
+    if (follow) follow.addEventListener('change', function () {
+      var follows = lsGet('follows', []);
+      var at = follows.indexOf(MOUNTAIN.id);
+      if (follow.checked) {
+        if (at < 0) follows.push(MOUNTAIN.id);
+      } else if (at >= 0) {
+        follows.splice(at, 1);
+      }
+      lsSet('follows', follows);
+      checkForNotifs();
+      renderNotifs();
+    });
+    var read = $('notif-read');
+    if (read) read.addEventListener('click', function () {
+      lsSet('notifs', lsGet('notifs', []).map(function (n) {
+        return Object.assign({}, n, { read: true });
+      }));
+      renderNotifs();
+    });
+  }
   // A toast fallback and a plain-overlay fallback live here so a missing
   // native kit still reads as the app. The fallback toast clears the tab
   // bar (68 px + the safe-area inset) by 12 px, as the kit's own toast does.

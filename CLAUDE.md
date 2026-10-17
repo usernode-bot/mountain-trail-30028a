@@ -98,15 +98,23 @@ tables you've marked private), etc.
 ## About Mountain Trail
 
 An offline trail guide and safety companion for hikers, built around one
-mountain: Gede Pangrango by the Cibodas route. The guide (posts, water
-sources, camps, the trail line) ships with the app as static content in
-`public/trail-data.js`, so it works with no signal. Hikers report current
-trail conditions (Slippery, Landslide, No water, Heavy fog) with one tap and
-an optional photo, build a packing checklist from days and group size, and
-share their last location as a message for basecamp or family. Reports are
-shared through the server so the next hiker sees them. When a signed-in
-hiker updates their location, a copy is sent to the server (queued offline
-and replayed on reconnect) into a private, append-only table that nothing in
+mountain: Gede Pangrango by the Cibodas route. The whole interface speaks
+Indonesian and English (`public/i18n.js`; a header pill switches, the
+choice is remembered on the phone). The guide (posts, water sources, camps,
+the trail line) ships with the app as static content in
+`public/trail-data.js`, which also carries the curated trail status
+(open / open with limits / closed, with a reason), permits and daily quota
+with the official SIMAKSI booking link, and a 3-day basecamp and summit
+forecast — every block timestamped and marked "not verified" until a person
+confirms it, because the platform offers no live source. Hikers report
+current trail conditions (Slippery, Landslide, No water, Heavy fog,
+Wildlife, Extreme weather, Fallen tree) with one tap and an optional photo,
+confirm someone else's report as "Still valid" (a count, it does not extend
+the 24 hours), build a packing checklist from days and group size, and share their
+last location as a message for basecamp or family. Reports are shared
+through the server so the next hiker sees them. When a signed-in hiker
+updates their location, a copy is sent to the server (queued offline and
+replayed on reconnect) into a private, append-only table that nothing in
 the app reads back; the phone keeps its own copy, and the checklist, name
 and basecamp contact stay on the phone.
 
@@ -193,6 +201,12 @@ Re-theme by changing the token values there, keeping every text pair at
   displayed anywhere.
 - Two flags hide a report for everyone; the author's own reports are never
   hidden by flags. A report flagged by you disappears for you at once.
+- Shared front-end logic lives in small UMD factory modules next to the
+  guide: `public/status.js` (status tones, weather-warning thresholds, the
+  24-hour report window) and `public/i18n.js` (every user-facing string in
+  Indonesian and English, key parity asserted by test). Both are precached
+  by the service worker like `trail-data.js`. New user-facing copy goes in
+  `i18n.js`, never inline.
 - "Masih berlaku" confirmations live in `report_confirms`, a public
   append-only table like `report_flags`: one row per hiker per report (the
   primary key), a re-sent tap no-ops on its `client_id`. The count shows on

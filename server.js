@@ -165,12 +165,17 @@ async function migrate() {
     user_id TEXT NOT NULL,
     username TEXT NOT NULL,
     stop_id TEXT NOT NULL,
-    condition TEXT NOT NULL CHECK (condition IN ('slippery','landslide','no-water','heavy-fog')),
+    condition TEXT NOT NULL CHECK (condition IN ('slippery','landslide','no-water','heavy-fog','wildlife','extreme-weather','fallen-tree')),
     note TEXT CHECK (char_length(note) <= 200),
     photo_url TEXT,
     photo_id TEXT,
     created_at TIMESTAMPTZ NOT NULL
   )`);
+  // Older databases carry the four-condition CHECK; replace it so the
+  // three new conditions insert. Idempotent, like every migration here.
+  await pool.query('ALTER TABLE trail_reports DROP CONSTRAINT IF EXISTS trail_reports_condition_check');
+  await pool.query(`ALTER TABLE trail_reports ADD CONSTRAINT trail_reports_condition_check
+    CHECK (condition IN ('slippery','landslide','no-water','heavy-fog','wildlife','extreme-weather','fallen-tree'))`);
   await pool.query(
     'CREATE INDEX IF NOT EXISTS trail_reports_created_at_idx ON trail_reports (created_at DESC)'
   );
