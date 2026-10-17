@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const { Pool } = require('pg');
 const jwt = require('jsonwebtoken');
 
@@ -35,7 +36,7 @@ const GUEST_PUBLIC_KEY = (process.env.USERNODE_GUEST_JWT_PUBLIC_KEY || '')
 // Paths that stay open without authentication. Add a path here (and add it
 // with `app.get`/`app.post` below) if you deliberately want it public.
 // Everything else requires a valid platform-issued JWT.
-const PUBLIC_API_PATHS = new Set(['/health', '/api/me', '/api/reports']);
+const PUBLIC_API_PATHS = new Set(['/health', '/api/me', '/api/reports', '/api/catalog/overrides']);
 
 app.use(express.json());
 
@@ -150,10 +151,23 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 // ── Mountain Trail ─────────────────────────────────────────────────────────
 // The guide ships with the app (public/trail-data.js); the server requires
 // the same file so a report can only name a real stop and a real condition.
+// The mountain catalog (public/mountain-catalog.js) works the same way for
+// the correction flow: a proposed edit can only name a real mountain and an
+// editable field.
 const trailData = require('./public/trail-data.js');
+const catalog = require('./public/mountain-catalog.js');
 const { parseLocation } = require('./lib/location.js');
+const { parseCatalogEdit } = require('./lib/catalog-edit.js');
 const STOP_IDS = new Set(trailData.STOPS.map((s) => s.id));
 const CONDITION_IDS = new Set(trailData.CONDITIONS.map((c) => c.id));
+
+// This app's admins are the names in dapp.json's `admins` array, read once
+// at boot. The platform tells the app who is signed in but never what their
+// role is, so this list is the whole of admin verification: it only ever
+// widens what the review routes answer (approve/reject and the pending
+// queue), nothing else.
+const APP_ADMINS = new Set((JSON.parse(fs.readFileSync(path.join(__dirname, 'dapp.json'), 'utf8')).admins) || []);
+const isAdmin = (u) => !!u && APP_ADMINS.has(u.username);
 
 // Both tables are public (staging copies their rows): they carry Homeroom
 // usernames, which are public, plus trail notes and photo URLs. No personal
@@ -197,6 +211,28 @@ async function migrate() {
     received_at TIMESTAMPTZ NOT NULL
   )`);
   await pool.query("COMMENT ON TABLE hiker_locations IS 'staging:private'");
+  // Climbers' proposed corrections to the mountain catalog, one field per
+  // row, reviewed before anything shows. Public (usernames and trail facts
+  // only), with one CHECK-guarded status. `value` is TEXT even for
+  // elevation: the field names the meaning, and parseCatalogEdit has
+  // already validated the value against the shipped catalog.
+  await pool.query(`CREATE TABLE IF NOT EXISTS mountain_edits (
+    id SERIAL PRIMARY KEY,
+    client_id TEXT UNIQUE NOT NULL,
+    mountain_id TEXT NOT NULL,
+    field TEXT NOT NULL CHECK (field IN ('elevM','difficulty','duration','status','permit','basecamp','note')),
+    value TEXT NOT NULL CHECK (char_length(value) <= 300),
+    note TEXT CHECK (char_length(note) <= 300),
+    user_id TEXT NOT NULL,
+    username TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+    created_at TIMESTAMPTZ NOT NULL,
+    decided_at TIMESTAMPTZ,
+    decided_by TEXT
+  )`);
+  await pool.query(
+    'CREATE INDEX IF NOT EXISTS mountain_edits_status_idx ON mountain_edits (status, created_at DESC)'
+  );
 }
 
 function rowToReport(r) {
@@ -236,6 +272,7 @@ app.get('/api/me', (req, res) => {
     user: req.user ? { id: req.user.id, username: req.user.username } : null,
     guest: !!req.guest,
     demo: IS_STAGING && req.query.demo === '1',
+    admin: !!(req.user && isAdmin(req.user)),
   });
 });
 
@@ -347,6 +384,160 @@ app.post('/api/locations', async (req, res) => {
     res.status(500).json({ error: 'Could not save the location' });
   }
 });
+
+// ── Mountain catalog corrections ───────────────────────────────────────────
+// Climbers propose edits to the shipped catalog; an admin approves or
+// rejects each one. Approved rows are the public overlay GET
+// /api/catalog/overrides merges into what every hiker sees; pending and
+// rejected rows show to nobody but the admin reviewing them.
+
+function rowToEdit(r) {
+  return {
+    id: r.id,
+    clientId: r.client_id,
+    mountainId: r.mountain_id,
+    field: r.field,
+    value: r.value,
+    note: r.note || '',
+    username: r.username,
+    status: r.status,
+    createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at,
+  };
+}
+
+// POST /api/mountains/:id/edits: one proposed correction. Idempotent by
+// client_id like reports, so a replay whose reply was lost is safe. Capped
+// at 20 pending corrections per climber so the review queue cannot be
+// flooded.
+app.post('/api/mountains/:id/edits', async (req, res) => {
+  const b = req.body || {};
+  if (b.mountainId !== req.params.id) return res.status(400).json({ error: 'Invalid correction' });
+  const edit = parseCatalogEdit(b, catalog);
+  if (!edit) return res.status(400).json({ error: 'Invalid correction' });
+  try {
+    const count = await pool.query(
+      "SELECT count(*)::int AS n FROM mountain_edits WHERE user_id = $1 AND status = 'pending'",
+      [req.user.id]
+    );
+    if (count.rows[0].n >= 20) {
+      return res.status(429).json({ error: 'Too many pending corrections' });
+    }
+    await pool.query(
+      `INSERT INTO mountain_edits (client_id, mountain_id, field, value, note, user_id, username, status, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8)
+       ON CONFLICT (client_id) DO NOTHING`,
+      [edit.clientId, edit.mountainId, edit.field, edit.value, edit.note, req.user.id, req.user.username, req.now]
+    );
+    const q = await pool.query(
+      'SELECT id, client_id, mountain_id, field, value, note, username, status, created_at FROM mountain_edits WHERE client_id = $1',
+      [edit.clientId]
+    );
+    res.status(201).json({ edit: rowToEdit(q.rows[0]) });
+  } catch (err) {
+    console.warn('catalog edit insert failed: ' + err.message);
+    res.status(500).json({ error: 'Could not save the correction' });
+  }
+});
+
+// GET /api/catalog/edits?status=pending — the admin's review queue.
+app.get('/api/catalog/edits', async (req, res) => {
+  if (!req.user || !isAdmin(req.user)) return res.status(403).json({ error: 'Admins only' });
+  const status = ['pending', 'approved', 'rejected'].indexOf(req.query.status) >= 0
+    ? req.query.status
+    : 'pending';
+  try {
+    const q = await pool.query(
+      `SELECT id, client_id, mountain_id, field, value, note, user_id, username, status, created_at, decided_at, decided_by
+         FROM mountain_edits WHERE status = $1
+        ORDER BY created_at DESC LIMIT 100`,
+      [status]
+    );
+    res.json({ now: req.now.toISOString(), edits: q.rows.map(rowToEdit) });
+  } catch (err) {
+    console.warn('catalog edits query failed: ' + err.message);
+    res.status(500).json({ error: 'Could not load corrections' });
+  }
+});
+
+async function decideEdit(req, res, status) {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return res.sendStatus(404);
+  try {
+    const q = await pool.query('SELECT id, status FROM mountain_edits WHERE id = $1', [id]);
+    const row = q.rows[0];
+    if (!row) return res.sendStatus(404);
+    if (row.status !== 'pending') return res.status(400).json({ error: 'Already decided' });
+    await pool.query(
+      'UPDATE mountain_edits SET status = $2, decided_at = $3, decided_by = $4 WHERE id = $1',
+      [id, status, req.now, req.user.username]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.warn('catalog edit decision failed: ' + err.message);
+    res.status(500).json({ error: 'Could not save the decision' });
+  }
+}
+
+// POST /api/catalog/edits/:id/approve | /reject — admin only.
+app.post('/api/catalog/edits/:id/approve', (req, res) => {
+  if (!req.user || !isAdmin(req.user)) return res.status(403).json({ error: 'Admins only' });
+  decideEdit(req, res, 'approved');
+});
+app.post('/api/catalog/edits/:id/reject', (req, res) => {
+  if (!req.user || !isAdmin(req.user)) return res.status(403).json({ error: 'Admins only' });
+  decideEdit(req, res, 'rejected');
+});
+
+// GET /api/catalog/overrides — the approved overlay, public: it is exactly
+// what the catalog shows everyone. Latest approved edit per (mountain,
+// field) wins.
+app.get('/api/catalog/overrides', async (req, res) => {
+  try {
+    const q = await pool.query(
+      `SELECT DISTINCT ON (mountain_id, field) mountain_id, field, value, decided_at
+         FROM mountain_edits
+        WHERE status = 'approved'
+        ORDER BY mountain_id, field, decided_at DESC`
+    );
+    const overrides = {};
+    q.rows.forEach((r) => {
+      if (!overrides[r.mountain_id]) overrides[r.mountain_id] = {};
+      overrides[r.mountain_id][r.field] = r.value;
+    });
+    res.json({ now: req.now.toISOString(), overrides });
+  } catch (err) {
+    console.warn('catalog overrides query failed: ' + err.message);
+    res.status(500).json({ error: 'Could not load corrections' });
+  }
+});
+
+// The staging demo for the correction flow: three made-up edits — two
+// waiting in the review queue, one already approved (so the overlay can be
+// seen changing a mountain). Production never runs this branch; it is
+// idempotent and never a real user.
+async function seedStagingEdits() {
+  if (!IS_STAGING) return;
+  const rows = [
+    { clientId: 'demo-edit-rinjani-status', mountainId: 'rinjani', field: 'status', value: 'closed',
+      note: 'Staging demo: the park closes this route every rainy season', username: 'demo-climber-sari', status: 'pending' },
+    { clientId: 'demo-edit-semeru-elev', mountainId: 'semeru', field: 'elevM', value: '3676',
+      note: 'Staging demo figure from the latest survey', username: 'demo-climber-bima', status: 'pending' },
+    { clientId: 'demo-edit-prau-duration', mountainId: 'prau', field: 'duration', value: 'overnight',
+      note: 'Staging demo, already approved', username: 'demo-climber-nina', status: 'approved' },
+  ];
+  for (const r of rows) {
+    await pool.query(
+      `INSERT INTO mountain_edits
+         (client_id, mountain_id, field, value, note, user_id, username, status, created_at, decided_at, decided_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       ON CONFLICT (client_id) DO NOTHING`,
+      [r.clientId, r.mountainId, r.field, r.value, r.note, 'demo-user-' + r.username, r.username, r.status,
+        new Date(Date.now() - 3600 * 1000),
+        r.status === 'approved' ? new Date(Date.now() - 1800 * 1000) : null,
+        r.status === 'approved' ? 'demo-admin' : null]
+    );
+  }
+}
 
 async function ownReportOr404(req, res) {
   const id = Number(req.params.id);
@@ -480,6 +671,7 @@ app.get('*', (req, res) => {
 
 async function start() {
   await migrate();
+  await seedStagingEdits();
   const server = app.listen(port, () => console.log(`Listening on :${port}`));
   // Let Envoy retire idle upstream connections at 60s, with a 15s margin.
   server.keepAliveTimeout = 75_000;
