@@ -25,6 +25,11 @@
       "expectSelector": "#trail-line"
     },
     {
+      "name": "Profile stop labels",
+      "path": "/",
+      "expectText": "km 0, start"
+    },
+    {
       "id": "trail.demo",
       "name": "Populated demo",
       "path": "/?demo=1",

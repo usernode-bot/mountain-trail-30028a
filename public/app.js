@@ -16,6 +16,7 @@
   var MOUNTAIN = M.MOUNTAIN;
   var STOPS = M.STOPS;
   var STOP_BY_ID = M.STOP_BY_ID;
+  var MIN_FROM_BASECAMP = M.MIN_FROM_BASECAMP;
   var COND_BY_ID = M.COND_BY_ID;
 
   // ── Small helpers ──────────────────────────────────────────────────────
@@ -382,6 +383,20 @@
     if (cBtn && !worst.confirmedByMe) cBtn.addEventListener('click', function () { confirmReport(worst); });
   }
 
+  // The stop picked on the height profile (module state, so the pick and
+  // its ring survive a report reload), or null for the default two ends.
+  var profileStop = null;
+
+  function pickProfileStop(id, fromChart) {
+    profileStop = profileStop === id ? null : id;
+    renderProfile();
+    // A tap on the chart may land on a chip that is scrolled out of view.
+    if (profileStop && fromChart) {
+      var chip = document.querySelector('[data-profile-stop="' + profileStop + '"]');
+      if (chip) chip.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+  }
+
   function renderProfile() {
     var W = 358, H = 80, x0 = 8, x1 = 350, yTop = 12, yBot = 72;
     var kmMax = STOPS[STOPS.length - 1].km;
@@ -400,11 +415,56 @@
       var r = tone ? 4.5 : 4;
       return '<circle class="' + cls + '" cx="' + px(s.km).toFixed(1) + '" cy="' + py(s.elevM).toFixed(1) + '" r="' + r + '"/>';
     }).join('');
-    $('profile').innerHTML =
+    var ring = '';
+    var picked = profileStop && STOP_BY_ID[profileStop] ? STOP_BY_ID[profileStop] : null;
+    if (picked) {
+      ring = '<circle class="profile-selected" cx="' + px(picked.km).toFixed(1) + '" cy="' + py(picked.elevM).toFixed(1) + '" r="7.5"/>';
+    }
+    var box = $('profile');
+    box.innerHTML =
       '<svg viewBox="0 0 358 80" class="block w-full" role="img" aria-label="Height profile from basecamp to summit">' +
       '<line x1="0" y1="77" x2="358" y2="77" style="stroke:rgb(var(--line));stroke-width:1"/>' +
-      '<polyline class="profile-line" points="' + pts + '"/>' + dots + '</svg>';
-    $('profile-ends').innerHTML = '<span>Basecamp ' + fmtM(STOPS[0].elevM) + ' m</span><span>Summit ' + fmtM(eMax) + ' m</span>';
+      '<polyline class="profile-line" points="' + pts + '"/>' + dots + ring + '</svg>';
+    // Tapping the chart picks the stop whose dot is nearest left or right
+    // of the tap, so the closely spaced dots stay easy to hit.
+    box.onclick = function (e) {
+      var rect = box.getBoundingClientRect();
+      var vx = ((e.clientX - rect.left) / rect.width) * W;
+      var best = null, bestD = Infinity;
+      STOPS.forEach(function (s) {
+        var d = Math.abs(px(s.km) - vx);
+        if (d < bestD) { bestD = d; best = s.id; }
+      });
+      if (best) pickProfileStop(best, true);
+    };
+    var ends = $('profile-ends');
+    if (picked) {
+      ends.innerHTML =
+        '<p><span class="font-semibold text-fg">' + esc(picked.name) + '</span>, km ' + fmtKm(picked.km) +
+        ', ' + fmtM(picked.elevM) + ' m. ' +
+        (picked.id === STOPS[0].id ? 'Where the walk starts.' : 'About ' + fmtDur(MIN_FROM_BASECAMP[picked.id]) + ' from basecamp.') +
+        '</p>';
+    } else {
+      ends.innerHTML = '<span>Basecamp ' + fmtM(STOPS[0].elevM) + ' m</span><span>Summit ' + fmtM(eMax) + ' m</span>';
+    }
+    // One chip per stop, in trail order: the labels the chart is too small
+    // to carry, and the keyboard and screen-reader path to the profile.
+    var row = $('profile-stops');
+    row.innerHTML = STOPS.map(function (s) {
+      var on = profileStop === s.id;
+      var meta = s.id === STOPS[0].id
+        ? 'km 0, start'
+        : 'km ' + fmtKm(s.km) + ', ' + fmtDur(MIN_FROM_BASECAMP[s.id]);
+      return '<li><button type="button" class="profile-stop' + (on ? ' profile-stop-selected' : '') +
+        '" data-profile-stop="' + s.id + '" aria-pressed="' + (on ? 'true' : 'false') + '">' +
+        '<span class="profile-stop-name">' + esc(s.name) + '</span>' +
+        '<span class="profile-stop-meta">' + meta + '</span></button></li>';
+    }).join('');
+    Array.prototype.forEach.call(row.querySelectorAll('[data-profile-stop]'), function (btn) {
+      btn.addEventListener('click', function () {
+        pickProfileStop(btn.getAttribute('data-profile-stop'), false);
+      });
+    });
   }
 
   function condLineHtml(stop) {
@@ -495,11 +555,13 @@
       '<button type="button" class="btn-secondary mt-3" data-report-here="' + s.id + '">Report here</button>';
   }
 
-  function fmtLeg(leg) {
-    var min = leg.min;
+  // "40 min", "3 h", "3 h 40 min" — the walk-time half of fmtLeg.
+  function fmtDur(min) {
     var h = Math.floor(min / 60), m = min % 60;
-    var t = h > 0 ? (h + ' h' + (m ? ' ' + m + ' min' : '')) : m + ' min';
-    return t + ', +' + fmtM(leg.climbM) + ' m';
+    return h > 0 ? (h + ' h' + (m ? ' ' + m + ' min' : '')) : m + ' min';
+  }
+  function fmtLeg(leg) {
+    return fmtDur(leg.min) + ', +' + fmtM(leg.climbM) + ' m';
   }
 
   // ── Report tab ─────────────────────────────────────────────────────────
