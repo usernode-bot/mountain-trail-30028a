@@ -130,6 +130,10 @@
         var copy = Object.assign({}, r);
         if ('note' in o) copy.note = o.note;
         if ('photoUrl' in o) copy.photoUrl = o.photoUrl;
+        if (o.confirmed && !r.confirmedByMe) {
+          copy.confirmedByMe = true;
+          copy.confirms = (r.confirms || 0) + 1;
+        }
         return copy;
       });
     }
@@ -293,6 +297,7 @@
   function renderStatus() {
     var el = $('status-strip');
     el.className = 'status-strip mt-4';
+    el.onclick = null;
     if (loading) {
       el.classList.add('status-strip-skeleton');
       el.removeAttribute('role');
@@ -328,21 +333,53 @@
     var cond = COND_BY_ID[worst.condition];
     el.classList.add(cond.tone === 'danger' ? 'status-strip-danger' : 'status-strip-warn');
     var others = list.length - 1;
-    el.setAttribute('role', 'button');
-    el.setAttribute('tabindex', '0');
-    el.setAttribute('aria-label', 'Open ' + STOP_BY_ID[worst.stopId].name);
+    // The strip is no longer one button: it holds a confirm button and
+    // maybe a photo, which must not sit inside a clickable role. The title
+    // button is the keyboard target; pointer taps anywhere else still open
+    // the stop.
+    el.removeAttribute('role');
+    el.removeAttribute('tabindex');
+    el.removeAttribute('aria-label');
+    var confirmBtn = '';
+    if (!worst.mine && !worst.pending) {
+      confirmBtn = '<button type="button" class="btn-secondary mt-2" data-confirm' +
+        (worst.confirmedByMe
+          ? ' aria-pressed="true" aria-disabled="true">' + iconSvg('check', 'h-5 w-5 text-accent') + 'Masih berlaku</button>'
+          : '>Masih berlaku</button>');
+    }
     el.innerHTML = iconSvg(worst.condition === 'landslide' ? 'landslide' : worst.condition, 'status-strip-icon') +
-      '<div><p class="text-body font-medium">' + esc(cond.label) + ' at ' + esc(STOP_BY_ID[worst.stopId].name) + '</p>' +
-      '<p class="text-small text-muted">Reported ' + esc(M.formatAgo(nowDate().getTime() - new Date(worst.createdAt).getTime())) +
-      (others > 0 ? '. ' + others + ' more report' + (others === 1 ? '' : 's') + ' in the last 24 hours.' : '.') + '</p></div>';
+      '<div class="min-w-0 flex-1">' +
+      '<button type="button" class="status-strip-open" aria-label="Open ' + esc(STOP_BY_ID[worst.stopId].name) + '">' +
+      '<span class="text-body font-medium">' + esc(cond.label) + ' at ' + esc(STOP_BY_ID[worst.stopId].name) + '</span></button>' +
+      '<p class="text-small text-muted">Reported by ' + (worst.mine ? 'you' : esc(worst.username)) +
+      ' at ' + esc(fmtClock(worst.createdAt)) + ', ' +
+      esc(M.formatAgo(nowDate().getTime() - new Date(worst.createdAt).getTime())) +
+      (others > 0 ? '. ' + others + ' more report' + (others === 1 ? '' : 's') + ' in the last 24 hours.' : '.') + '</p>' +
+      (worst.confirms > 0 ? '<p class="text-small text-muted">' + esc(M.formatConfirms(worst.confirms)) + '</p>' : '') +
+      confirmBtn + '</div>' +
+      (worst.photoUrl
+        ? '<button type="button" class="status-strip-photo" data-photo="' + esc(worst.photoUrl) + '" aria-label="Open the photo">' +
+          iconSvg('photo', 'h-6 w-6') + '<img alt="" src="' + esc(worst.photoUrl) + '"></button>'
+        : '');
     function openWorst() {
       expandedStop = worst.stopId;
       renderStops();
       var row = document.getElementById('stop-' + worst.stopId);
       if (row) row.scrollIntoView({ block: 'start', behavior: 'smooth' });
     }
-    el.onclick = openWorst;
-    el.onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openWorst(); } };
+    el.onclick = function (e) {
+      if (e.target.closest('[data-confirm], [data-photo]')) return;
+      openWorst();
+    };
+    var photoBtn = el.querySelector('[data-photo]');
+    if (photoBtn) {
+      photoBtn.addEventListener('click', function () { showPhoto(photoBtn.getAttribute('data-photo')); });
+      var pimg = photoBtn.querySelector('img');
+      // Offline the photo cannot load; the drawn icon behind it shows.
+      if (pimg) pimg.addEventListener('error', function () { pimg.hidden = true; });
+    }
+    var cBtn = el.querySelector('[data-confirm]');
+    if (cBtn && !worst.confirmedByMe) cBtn.addEventListener('click', function () { confirmReport(worst); });
   }
 
   function renderProfile() {
@@ -450,6 +487,7 @@
         '<span class="report-icon report-icon-' + (c.tone === 'danger' ? 'danger' : 'warn') + '">' + iconSvg(r.condition === 'landslide' ? 'landslide' : r.condition, 'h-4 w-4') + '</span>' +
         '<div class="min-w-0 flex-1"><p class="text-body font-medium">' + esc(c.label) + '</p>' +
         '<p class="text-small text-muted">' + (r.mine ? 'You' : esc(r.username)) + ', ' + esc(M.formatAgo(nowDate().getTime() - new Date(r.createdAt).getTime())) + '</p>' +
+        (r.confirms > 0 ? '<p class="text-small text-muted">' + esc(M.formatConfirms(r.confirms)) + '</p>' : '') +
         (r.note ? '<p class="mt-0.5 text-small">' + esc(r.note) + '</p>' : '') + '</div></li>';
     }).join('');
     return '<p class="mt-2 text-body">' + esc(s.detail) + '</p>' +
@@ -846,6 +884,46 @@
       }
       renderReportsAndTrail();
     });
+  }
+
+  // "Masih berlaku": the hiker can see the condition is still there. One
+  // confirmation per hiker per report; never queued offline — a tap with no
+  // signal just asks to try again.
+  async function confirmReport(r) {
+    if (!ME.user) { askForAccount(); return; }
+    if (isDemoRow(r)) {
+      var dov = lsGet('overrides', {});
+      dov[r.id] = Object.assign({}, dov[r.id], { confirmed: true });
+      lsSet('overrides', dov);
+      renderReportsAndTrail();
+      return;
+    }
+    var live = null;
+    reports.forEach(function (x) { if (x.id === r.id) live = x; });
+    if (!live) return;
+    var prevConfirms = live.confirms || 0;
+    live.confirmedByMe = true;
+    live.confirms = prevConfirms + 1;
+    renderReportsAndTrail();
+    var res = null;
+    try {
+      res = await api('/api/reports/' + r.id + '/confirm', { method: 'POST', body: { clientId: uuid() } });
+    } catch (e) {}
+    if (res && res.ok && res.data) {
+      live.confirms = res.data.confirms;
+      live.confirmedByMe = res.data.confirmedByMe !== false;
+    } else if (res && res.status === 400) {
+      live.confirmedByMe = false;
+      live.confirms = prevConfirms;
+      kitToast('You can\'t confirm your own report');
+    } else if (res && res.status === 404) {
+      reports = reports.filter(function (x) { return x.id !== r.id; });
+    } else {
+      live.confirmedByMe = false;
+      live.confirms = prevConfirms;
+      kitToast('Couldn\'t confirm. Try again when you have signal.');
+    }
+    renderReportsAndTrail();
   }
 
   function reportMenu(anchorEl, id) {

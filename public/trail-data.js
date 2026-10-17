@@ -131,6 +131,12 @@
     return 'over a day ago';
   }
 
+  // "1 hiker says it's still there." Blank when there is nothing to show.
+  function formatConfirms(n) {
+    if (typeof n !== 'number' || !isFinite(n) || n < 1) return '';
+    return n === 1 ? "1 hiker says it's still there." : n + " hikers say it's still there.";
+  }
+
   return {
     MOUNTAIN: MOUNTAIN,
     CONDITIONS: CONDITIONS,
@@ -139,5 +145,6 @@
     STOP_BY_ID: STOP_BY_ID,
     nearestStop: nearestStop,
     formatAgo: formatAgo,
+    formatConfirms: formatConfirms,
   };
 });
