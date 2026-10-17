@@ -169,9 +169,9 @@ const CONDITION_IDS = new Set(trailData.CONDITIONS.map((c) => c.id));
 const APP_ADMINS = new Set((JSON.parse(fs.readFileSync(path.join(__dirname, 'dapp.json'), 'utf8')).admins) || []);
 const isAdmin = (u) => !!u && APP_ADMINS.has(u.username);
 
-// Both tables are public (staging copies their rows): they carry Homeroom
-// usernames, which are public, plus trail notes and photo URLs. No personal
-// data.
+// trail_reports, report_flags and report_confirms are public (staging copies
+// their rows): they carry Homeroom usernames, which are public, plus trail
+// notes and photo URLs. No personal data.
 async function migrate() {
   await pool.query(`CREATE TABLE IF NOT EXISTS trail_reports (
     id SERIAL PRIMARY KEY,
@@ -191,6 +191,16 @@ async function migrate() {
   await pool.query(`CREATE TABLE IF NOT EXISTS report_flags (
     report_id INT REFERENCES trail_reports(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (report_id, user_id)
+  )`);
+  // "Masih berlaku" taps on the trail banner. One per hiker per report (the
+  // primary key); a re-sent tap no-ops on client_id. Append-only: rows go
+  // only by cascade when the report itself is removed.
+  await pool.query(`CREATE TABLE IF NOT EXISTS report_confirms (
+    report_id INT REFERENCES trail_reports(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL,
+    client_id TEXT UNIQUE NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (report_id, user_id)
   )`);
@@ -245,6 +255,8 @@ function rowToReport(r) {
     photoUrl: r.photo_url || null,
     username: r.username,
     mine: false,
+    confirms: Number(r.confirms) || 0,
+    confirmedByMe: !!r.confirmed_by_me,
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at,
   };
 }
@@ -258,9 +270,9 @@ const DEMO_PHOTO_SVG =
     '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240"><rect width="320" height="240" fill="#8a8f86"/><path d="M0 190 L110 90 L170 150 L210 120 L320 200 L320 240 L0 240 Z" fill="#5c6158"/><circle cx="250" cy="60" r="22" fill="#e8e6de"/><text x="16" y="30" font-family="system-ui" font-size="16" fill="#ffffff">Staging demo photo</text></svg>'
   );
 const DEMO_REPORTS = [
-  { id: -1, username: 'demo-hiker-sari', stopId: 'puncak-gede', condition: 'heavy-fog', minsAgo: 25, note: "Can't see past the crater rim. Wait at the shelter below." },
+  { id: -1, username: 'demo-hiker-sari', stopId: 'puncak-gede', condition: 'heavy-fog', minsAgo: 25, confirms: 1, note: "Can't see past the crater rim. Wait at the shelter below." },
   { id: -2, username: 'demo-hiker-dewi', stopId: 'air-panas', condition: 'slippery', minsAgo: 40, note: 'The rope is fine, the rocks are wet.' },
-  { id: -3, username: 'demo-hiker-raka', stopId: 'tanjakan-setan', condition: 'landslide', minsAgo: 60, note: 'Part of the path is buried. Pass on the left by the ropes.', photoUrl: DEMO_PHOTO_SVG },
+  { id: -3, username: 'demo-hiker-raka', stopId: 'tanjakan-setan', condition: 'landslide', minsAgo: 60, confirms: 3, note: 'Part of the path is buried. Pass on the left by the ropes.', photoUrl: DEMO_PHOTO_SVG },
   { id: -4, username: 'demo-hiker-bima', stopId: 'kandang-badak', condition: 'no-water', minsAgo: 120, note: 'The spring is only dripping. Fill up at Kandang Batu.' },
   { id: -5, username: null, stopId: 'rawa-gayonggong', condition: 'slippery', minsAgo: 180, note: 'Boardwalk planks are mossy.' },
   { id: -6, username: 'demo-hiker-nina', stopId: 'kandang-badak', condition: 'heavy-fog', minsAgo: 300, note: '' },
@@ -282,7 +294,9 @@ app.get('/api/reports', async (req, res) => {
   let rows;
   try {
     const q = await pool.query(
-      `SELECT r.id, r.client_id, r.stop_id, r.condition, r.note, r.photo_url, r.user_id, r.username, r.created_at
+      `SELECT r.id, r.client_id, r.stop_id, r.condition, r.note, r.photo_url, r.user_id, r.username, r.created_at,
+         (SELECT count(*) FROM report_confirms c WHERE c.report_id = r.id)::int AS confirms,
+         EXISTS (SELECT 1 FROM report_confirms c WHERE c.report_id = r.id AND c.user_id = $1) AS confirmed_by_me
          FROM trail_reports r
         WHERE r.created_at > $2
           AND NOT EXISTS (SELECT 1 FROM report_flags f WHERE f.report_id = r.id AND f.user_id = $1)
@@ -312,6 +326,8 @@ app.get('/api/reports', async (req, res) => {
       photoUrl: d.photoUrl || null,
       username: d.username || viewerName,
       mine: d.username === null,
+      confirms: d.confirms || 0,
+      confirmedByMe: false,
       createdAt: new Date(req.now.getTime() - d.minsAgo * 60000).toISOString(),
     }));
     reports.push(...demoRows);
@@ -622,6 +638,38 @@ app.post('/api/reports/:id/flag', async (req, res) => {
   } catch (err) {
     console.warn('flag insert failed: ' + err.message);
     res.status(500).json({ error: 'Could not flag the report' });
+  }
+});
+
+// POST /api/reports/:id/confirm: a hiker's "Masih berlaku" tap — the
+// warning is still true. One per hiker per report (the primary key); a
+// re-sent tap no-ops on its client_id. Needs an account, like every write,
+// so the auth gate answers guests 401 account_required.
+app.post('/api/reports/:id/confirm', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return res.sendStatus(404);
+  const b = req.body || {};
+  const clientId = typeof b.clientId === 'string' && b.clientId.length > 0 && b.clientId.length <= 64 ? b.clientId : null;
+  if (!clientId) return res.status(400).json({ error: 'Invalid confirmation' });
+  try {
+    const q = await pool.query('SELECT id, user_id, created_at FROM trail_reports WHERE id = $1', [id]);
+    const row = q.rows[0];
+    if (!row || req.now.getTime() - new Date(row.created_at).getTime() > 24 * 3600 * 1000) {
+      return res.sendStatus(404);
+    }
+    // String on both sides: the column is TEXT, the token's id a number.
+    if (String(row.user_id) === String(req.user.id)) {
+      return res.status(400).json({ error: 'You cannot confirm your own report' });
+    }
+    await pool.query(
+      'INSERT INTO report_confirms (report_id, user_id, client_id, created_at) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING',
+      [id, req.user.id, clientId, req.now]
+    );
+    const c = await pool.query('SELECT count(*)::int AS n FROM report_confirms WHERE report_id = $1', [id]);
+    res.json({ confirms: c.rows[0].n, confirmedByMe: true });
+  } catch (err) {
+    console.warn('confirm failed: ' + err.message);
+    res.status(500).json({ error: 'Could not confirm the report' });
   }
 });
 

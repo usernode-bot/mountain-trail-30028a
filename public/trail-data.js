@@ -101,6 +101,14 @@
   var STOP_BY_ID = {};
   STOPS.forEach(function (s) { STOP_BY_ID[s.id] = s; });
 
+  // Cumulative walking minutes from basecamp: each stop's time is the sum
+  // of legToNext.min for every leg before it, with no rest breaks. Basecamp
+  // itself is 0. Used by the labelled height profile.
+  var MIN_FROM_BASECAMP = { cibodas: 0 };
+  for (var mb = 1; mb < STOPS.length; mb++) {
+    MIN_FROM_BASECAMP[STOPS[mb].id] = MIN_FROM_BASECAMP[STOPS[mb - 1].id] + STOPS[mb - 1].legToNext.min;
+  }
+
   function haversineM(lat1, lng1, lat2, lng2) {
     var R = 6371000;
     var rad = Math.PI / 180;
@@ -131,13 +139,21 @@
     return 'over a day ago';
   }
 
+  // "1 hiker says it's still there." Blank when there is nothing to show.
+  function formatConfirms(n) {
+    if (typeof n !== 'number' || !isFinite(n) || n < 1) return '';
+    return n === 1 ? "1 hiker says it's still there." : n + " hikers say it's still there.";
+  }
+
   return {
     MOUNTAIN: MOUNTAIN,
     CONDITIONS: CONDITIONS,
     COND_BY_ID: COND_BY_ID,
     STOPS: STOPS,
     STOP_BY_ID: STOP_BY_ID,
+    MIN_FROM_BASECAMP: MIN_FROM_BASECAMP,
     nearestStop: nearestStop,
     formatAgo: formatAgo,
+    formatConfirms: formatConfirms,
   };
 });
