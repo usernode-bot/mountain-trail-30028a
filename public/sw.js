@@ -5,12 +5,13 @@
  * fetched from the network, never files vendored into the repo), and never
  * touches /api/.
  */
-var CACHE = 'mt-shell-v2';
+var CACHE = 'mt-shell-v3';
 var PRECACHE = [
   '/',
   '/tailwind.css',
   '/app.js',
   '/trail-data.js',
+  '/mountain-catalog.js',
   '/packing.js',
   '/share-links.js',
 ];
