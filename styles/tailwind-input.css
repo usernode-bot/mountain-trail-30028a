@@ -166,6 +166,18 @@
   .status-strip-skeleton {
     @apply pointer-events-none;
   }
+  /* The banner's title button (the keyboard target for opening the stop)
+     and the photo square at its right. The strip's text column is
+     min-w-0 flex-1, so a long name wraps and the photo stays at the right. */
+  .status-strip-open {
+    @apply block w-full rounded-md text-left text-body font-medium
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus;
+  }
+  .status-strip-photo {
+    @apply relative flex h-11 w-11 flex-none items-center justify-center overflow-hidden rounded-lg bg-raised text-muted
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus;
+  }
+  .status-strip-photo img { @apply absolute inset-0 h-full w-full object-cover; }
 
   /* The trail line, the app's signature: a dashed rail the way trails are
      drawn on a map, with a round node per stop carrying its kind's icon,
@@ -228,6 +240,37 @@
   }
   .profile-warn { fill: rgb(var(--warn)); }
   .profile-danger { fill: rgb(var(--danger)); }
+  .profile-selected {
+    fill: none;
+    stroke: rgb(var(--accent));
+    stroke-width: 2;
+  }
+  #profile svg { cursor: pointer; }
+
+  /* The stop chips under the profile: every stop with its km and walking
+     time from basecamp. Tapping a chip or a dot picks the stop, shown in
+     the action green like the status strip's pick. */
+  .profile-stops {
+    @apply list-none flex gap-2 overflow-x-auto pb-1;
+    scroll-snap-type: x proximity;
+  }
+  .profile-stop {
+    @apply flex min-h-11 flex-none flex-col items-start rounded-lg border border-line bg-surface px-3 py-1.5 text-left text-small
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus;
+    scroll-snap-align: start;
+  }
+  .profile-stop-name {
+    @apply font-medium whitespace-nowrap;
+  }
+  .profile-stop-meta {
+    @apply whitespace-nowrap text-muted;
+  }
+  .profile-stop-selected {
+    border-width: 2px;
+    border-color: rgb(var(--accent));
+    background: rgb(var(--accent) / 0.08);
+    padding: 5px 11px;
+  }
 
   /* The Report tab's four large buttons. One tap sends; no form first. */
   .condition-button {

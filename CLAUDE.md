@@ -193,6 +193,11 @@ Re-theme by changing the token values there, keeping every text pair at
   displayed anywhere.
 - Two flags hide a report for everyone; the author's own reports are never
   hidden by flags. A report flagged by you disappears for you at once.
+- "Masih berlaku" confirmations live in `report_confirms`, a public
+  append-only table like `report_flags`: one row per hiker per report (the
+  primary key), a re-sent tap no-ops on its `client_id`. The count shows on
+  the trail banner and the stop's report row; confirming never extends a
+  report's 24 hours, and old reports cannot be confirmed.
 - The app ships no basecamp phone number: a wrong number in a safety app
   is worse than none. Every share message carries Indonesia's emergency
   number, 112.
