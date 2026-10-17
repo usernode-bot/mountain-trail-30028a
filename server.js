@@ -165,12 +165,17 @@ async function migrate() {
     user_id TEXT NOT NULL,
     username TEXT NOT NULL,
     stop_id TEXT NOT NULL,
-    condition TEXT NOT NULL CHECK (condition IN ('slippery','landslide','no-water','heavy-fog')),
+    condition TEXT NOT NULL CHECK (condition IN ('slippery','landslide','no-water','heavy-fog','wildlife','extreme-weather','fallen-tree')),
     note TEXT CHECK (char_length(note) <= 200),
     photo_url TEXT,
     photo_id TEXT,
     created_at TIMESTAMPTZ NOT NULL
   )`);
+  // Older databases carry the four-condition CHECK; replace it so the
+  // three new conditions insert. Idempotent, like every migration here.
+  await pool.query('ALTER TABLE trail_reports DROP CONSTRAINT IF EXISTS trail_reports_condition_check');
+  await pool.query(`ALTER TABLE trail_reports ADD CONSTRAINT trail_reports_condition_check
+    CHECK (condition IN ('slippery','landslide','no-water','heavy-fog','wildlife','extreme-weather','fallen-tree'))`);
   await pool.query(
     'CREATE INDEX IF NOT EXISTS trail_reports_created_at_idx ON trail_reports (created_at DESC)'
   );
@@ -178,6 +183,15 @@ async function migrate() {
     report_id INT REFERENCES trail_reports(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (report_id, user_id)
+  )`);
+  // "Still valid" confirmations: one row per hiker per report, each pushing
+  // the report's 24-hour window out again. Public like the reports
+  // themselves — a username and a timestamp, nothing personal.
+  await pool.query(`CREATE TABLE IF NOT EXISTS report_confirms (
+    report_id INT NOT NULL REFERENCES trail_reports(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (report_id, user_id)
   )`);
   // Hikers' latest locations, sent on each "Update my location" tap. Private
@@ -200,6 +214,10 @@ async function migrate() {
 }
 
 function rowToReport(r) {
+  const lastConfirmed = r.last_confirmed_at || null;
+  const created = r.created_at instanceof Date ? r.created_at : new Date(r.created_at);
+  const confirmedAt = lastConfirmed instanceof Date ? lastConfirmed : (lastConfirmed ? new Date(lastConfirmed) : null);
+  const basis = confirmedAt && confirmedAt.getTime() > created.getTime() ? confirmedAt : created;
   return {
     id: r.id,
     clientId: r.client_id,
@@ -209,7 +227,11 @@ function rowToReport(r) {
     photoUrl: r.photo_url || null,
     username: r.username,
     mine: false,
-    createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at,
+    confirmCount: Number(r.confirm_count) || 0,
+    confirmedByMe: !!r.confirmed_by_me,
+    createdAt: created.toISOString(),
+    // 24 hours from creation; every confirmation pushes the window out.
+    expiresAt: new Date(basis.getTime() + 24 * 3600 * 1000).toISOString(),
   };
 }
 
@@ -245,9 +267,12 @@ app.get('/api/reports', async (req, res) => {
   let rows;
   try {
     const q = await pool.query(
-      `SELECT r.id, r.client_id, r.stop_id, r.condition, r.note, r.photo_url, r.user_id, r.username, r.created_at
+      `SELECT r.id, r.client_id, r.stop_id, r.condition, r.note, r.photo_url, r.user_id, r.username, r.created_at,
+              (SELECT count(*) FROM report_confirms c WHERE c.report_id = r.id) AS confirm_count,
+              (SELECT max(c.created_at) FROM report_confirms c WHERE c.report_id = r.id) AS last_confirmed_at,
+              EXISTS (SELECT 1 FROM report_confirms c WHERE c.report_id = r.id AND c.user_id = $1) AS confirmed_by_me
          FROM trail_reports r
-        WHERE r.created_at > $2
+        WHERE GREATEST(r.created_at, COALESCE((SELECT max(c.created_at) FROM report_confirms c WHERE c.report_id = r.id), r.created_at)) > $2
           AND NOT EXISTS (SELECT 1 FROM report_flags f WHERE f.report_id = r.id AND f.user_id = $1)
           AND (r.user_id = $1 OR (SELECT count(*) FROM report_flags f WHERE f.report_id = r.id) < 2)
         ORDER BY r.created_at DESC
@@ -275,6 +300,8 @@ app.get('/api/reports', async (req, res) => {
       photoUrl: d.photoUrl || null,
       username: d.username || viewerName,
       mine: d.username === null,
+      confirmCount: d.confirmCount || 0,
+      confirmedByMe: false,
       createdAt: new Date(req.now.getTime() - d.minsAgo * 60000).toISOString(),
     }));
     reports.push(...demoRows);
@@ -431,6 +458,36 @@ app.post('/api/reports/:id/flag', async (req, res) => {
   } catch (err) {
     console.warn('flag insert failed: ' + err.message);
     res.status(500).json({ error: 'Could not flag the report' });
+  }
+});
+
+// "Still valid": the hiker confirms a report they met too. One confirmation
+// per hiker per report; each one pushes the report's 24-hour window out.
+app.post('/api/reports/:id/confirm', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return res.sendStatus(404);
+  const q = await pool.query('SELECT id, created_at FROM trail_reports WHERE id = $1', [id]);
+  if (!q.rows[0]) return res.sendStatus(404);
+  try {
+    await pool.query(
+      'INSERT INTO report_confirms (report_id, user_id, created_at) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+      [id, req.user.id, req.now]
+    );
+    const c = await pool.query(
+      `SELECT count(*)::int AS n, max(created_at) AS last FROM report_confirms WHERE report_id = $1`,
+      [id]
+    );
+    const last = c.rows[0].last;
+    const basis = last && new Date(last).getTime() > new Date(q.rows[0].created_at).getTime()
+      ? new Date(last) : new Date(q.rows[0].created_at);
+    res.json({
+      ok: true,
+      confirmCount: c.rows[0].n,
+      expiresAt: new Date(basis.getTime() + 24 * 3600 * 1000).toISOString(),
+    });
+  } catch (err) {
+    console.warn('confirm insert failed: ' + err.message);
+    res.status(500).json({ error: 'Could not confirm the report' });
   }
 });
 
