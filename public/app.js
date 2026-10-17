@@ -643,8 +643,8 @@
     if (!worst.mine && !worst.pending) {
       confirmBtn = '<button type="button" class="btn-secondary mt-2" data-confirm' +
         (worst.confirmedByMe
-          ? ' aria-pressed="true" aria-disabled="true">' + iconSvg('check', 'h-5 w-5 text-accent') + 'Masih berlaku</button>'
-          : '>Masih berlaku</button>');
+          ? ' aria-pressed="true" aria-disabled="true">' + iconSvg('check', 'h-5 w-5 text-accent') + esc(t('confirm.stillValid')) + '</button>'
+          : '>' + esc(t('confirm.stillValid')) + '</button>');
     }
     el.innerHTML = iconSvg(worst.condition === 'landslide' ? 'landslide' : worst.condition, 'status-strip-icon') +
       '<div class="min-w-0 flex-1">' +
@@ -652,7 +652,7 @@
       '<span class="text-body font-medium">' + esc(tx('cond.' + cond.id + '.label', cond.label)) + ' ' + esc(t('strip.at')) + ' ' + esc(STOP_BY_ID[worst.stopId].name) + '</span></button>' +
       '<p class="text-small text-muted">' + esc(t('strip.reported', { ago: I18N.ago(LANG, nowDate().getTime() - new Date(worst.createdAt).getTime()) })) +
       (others > 0 ? '. ' + esc(tn('reports.more', others)) : '') + '.</p>' +
-      (worst.confirms > 0 ? '<p class="text-small text-muted">' + esc(M.formatConfirms(worst.confirms)) + '</p>' : '') +
+      (worst.confirms > 0 ? '<p class="text-small text-muted">' + esc(tn('confirm.count', worst.confirms)) + '</p>' : '') +
       confirmBtn + '</div>' +
       (worst.photoUrl
         ? '<button type="button" class="status-strip-photo" data-photo="' + esc(worst.photoUrl) + '" aria-label="Open the photo">' +
@@ -843,7 +843,7 @@
         '<span class="report-icon report-icon-' + (c.tone === 'danger' ? 'danger' : 'warn') + '">' + iconSvg(r.condition === 'landslide' ? 'landslide' : r.condition, 'h-4 w-4') + '</span>' +
         '<div class="min-w-0 flex-1"><p class="text-body font-medium">' + esc(tx('cond.' + c.id + '.label', c.label)) + '</p>' +
         '<p class="text-small text-muted">' + (r.mine ? esc(t('who.you')) : esc(r.username)) + ', ' + esc(I18N.ago(LANG, nowDate().getTime() - new Date(r.createdAt).getTime())) + '</p>' +
-        (r.confirms > 0 ? '<p class="text-small text-muted">' + esc(M.formatConfirms(r.confirms)) + '</p>' : '') +
+        (r.confirms > 0 ? '<p class="text-small text-muted">' + esc(tn('confirm.count', r.confirms)) + '</p>' : '') +
         (r.note ? '<p class="mt-0.5 text-small">' + esc(r.note) + '</p>' : '') + '</div></li>';
     }).join('');
     return '<p class="mt-2 text-body">' + esc(tx('stop.' + s.id + '.detail', s.detail)) + '</p>' +
@@ -1248,10 +1248,12 @@
   // signal just asks to try again.
   async function confirmReport(r) {
     if (!ME.user) { askForAccount(); return; }
+    if (!navigator.onLine) { kitToast(t('confirm.offline')); return; }
     if (isDemoRow(r)) {
       var dov = lsGet('overrides', {});
       dov[r.id] = Object.assign({}, dov[r.id], { confirmed: true });
       lsSet('overrides', dov);
+      kitToast(t('confirm.sent'));
       renderReportsAndTrail();
       return;
     }
@@ -1269,16 +1271,17 @@
     if (res && res.ok && res.data) {
       live.confirms = res.data.confirms;
       live.confirmedByMe = res.data.confirmedByMe !== false;
+      kitToast(t('confirm.sent'));
     } else if (res && res.status === 400) {
       live.confirmedByMe = false;
       live.confirms = prevConfirms;
-      kitToast('You can\'t confirm your own report');
+      kitToast(t('confirm.own'));
     } else if (res && res.status === 404) {
       reports = reports.filter(function (x) { return x.id !== r.id; });
     } else {
       live.confirmedByMe = false;
       live.confirms = prevConfirms;
-      kitToast('Couldn\'t confirm. Try again when you have signal.');
+      kitToast(t('confirm.fail'));
     }
     renderReportsAndTrail();
   }
@@ -1315,12 +1318,24 @@
     var who = r.mine ? t('who.you') : esc(r.username);
     var ago = r.pending ? I18N.ago(LANG, 0) : I18N.ago(LANG, nowDate().getTime() - new Date(r.createdAt).getTime());
     var sub = who + ', ' + ago + (r.pending && r.waiting ? ' · ' + t('share.section') : '');
+    var confirmLine = '';
+    if (!r.pending && !r.mine) {
+      if (r.confirmedByMe) {
+        confirmLine = '<p class="mt-1 text-small font-medium text-accent">' + esc(t('confirm.you')) + '</p>';
+      } else {
+        confirmLine = '<button type="button" class="btn-text" data-confirm="' + r.id + '">' + esc(t('confirm.stillValid')) + '</button>';
+      }
+    }
+    if (r.confirms > 0) {
+      confirmLine += '<p class="mt-0.5 text-small text-muted">' + esc(tn('confirm.count', r.confirms)) + '</p>';
+    }
     return '<li class="list-row items-start" data-id="' + r.id + '">' +
       '<span class="report-icon report-icon-' + tone + '">' + iconSvg(r.condition, 'h-5 w-5') + '</span>' +
       '<div class="min-w-0 flex-1">' +
       '<p class="text-body font-semibold">' + esc(tx('cond.' + c.id + '.label', c.label)) + ' ' + esc(t('strip.at')) + ' ' + esc(stop.name) + '</p>' +
       '<p class="text-small text-muted">' + esc(sub) + '</p>' +
       (r.note ? '<p class="mt-0.5 text-small">' + esc(r.note) + '</p>' : '') +
+      confirmLine +
       '</div>' +
       (r.photoUrl ? '<button type="button" class="report-thumb" data-photo="' + esc(r.photoUrl) + '" aria-label="' + esc(t('photo.open')) + '">' + iconSvg('photo', 'h-6 w-6') + '</button>' : '') +
       '<button type="button" class="flex h-11 w-11 flex-none items-center justify-center rounded-lg text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" data-menu aria-label="' + esc(t('menu.options')) + '">' + iconSvg('dots', 'h-5 w-5') + '</button>' +
@@ -1363,6 +1378,11 @@
     Array.prototype.forEach.call(ul.querySelectorAll('[data-menu]'), function (btn) {
       btn.addEventListener('click', function () {
         reportMenu(btn, Number(btn.closest('li').getAttribute('data-id')));
+      });
+    });
+    Array.prototype.forEach.call(ul.querySelectorAll('[data-confirm]'), function (btn) {
+      btn.addEventListener('click', function () {
+        confirmReport(findReportById(Number(btn.getAttribute('data-confirm'))));
       });
     });
     Array.prototype.forEach.call(ul.querySelectorAll('[data-photo]'), function (btn) {
