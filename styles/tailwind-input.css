@@ -292,14 +292,14 @@
   .fac { @apply mt-1 flex gap-3 text-small; }
   .fac > span { @apply inline-flex items-center gap-1; }
   .fac-water { color: rgb(var(--water)); }
-  /* A stop's landscape types (Mountain, Hill, Valley), like the water and
-     camp line but in muted grey. */
+  /* The mountain's category (Mountain, Hill, Valley) under its name, like
+     a stop's water and camp line but in muted grey. */
   .ls-line { @apply mt-1 flex gap-3 text-small text-muted; }
   .ls-line > span { @apply inline-flex items-center gap-1; }
-  /* One stop or none left by the landscape filter: no rail to draw. */
+  /* One stop or none left by the stop-type filter: no rail to draw. */
   .trail-line-bare::before { display: none; }
 
-  /* The landscape filter chips above the trail line, shaped like the stop
+  /* The stop-type filter chips above the trail line, shaped like the stop
      chips under the profile; the picked one in the action green. */
   .chip-row {
     @apply mb-3 flex gap-1.5 overflow-x-auto pb-1;

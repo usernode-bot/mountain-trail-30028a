@@ -99,39 +99,65 @@ test('formatConfirms words the count and is blank for none', () => {
   assert.equal(T.formatConfirms(24), "24 hikers say it's still there.");
 });
 
-test('every stop has landscape types: known ids, no duplicates, in display order', () => {
-  for (const s of T.STOPS) {
-    assert.ok(Array.isArray(s.landscape) && s.landscape.length > 0, s.id + ' has a landscape');
-    const order = s.landscape.map((id) => T.LANDSCAPES.indexOf(id));
-    order.forEach((o, i) => {
-      assert.ok(o >= 0, s.id + ' landscape id is known');
-      if (i > 0) assert.ok(o > order[i - 1], s.id + ' landscape is in order, no duplicates');
-    });
-  }
+test('the category belongs to the destination, never to a stop', () => {
   assert.deepEqual(T.LANDSCAPES, ['gunung', 'bukit', 'lembah']);
+  for (const d of T.DESTINATIONS) assert.ok(T.LANDSCAPES.includes(d.category), d.id + ' category is known');
+  assert.equal(T.MOUNTAIN.category, 'gunung');
+  for (const s of T.ALL_STOPS) assert.equal(s.landscape, undefined, s.id + ' carries no category');
 });
 
-test('the Cibodas route: every stop is gunung, only Rawa Gayonggong is also lembah, none bukit', () => {
-  for (const s of T.STOPS) {
-    assert.ok(s.landscape.includes('gunung'), s.id + ' is gunung');
-    assert.ok(!s.landscape.includes('bukit'), s.id + ' is not bukit');
-    assert.equal(s.landscape.includes('lembah'), s.id === 'rawa-gayonggong', s.id + ' lembah');
+test('stop types: known kinds, and the chip counts count stops on the route', () => {
+  const KINDS = ['basecamp', 'post', 'water', 'camp', 'junction', 'summit'];
+  for (const s of T.ALL_STOPS) {
+    assert.ok(s.kinds.length > 0, s.id + ' has a type');
+    s.kinds.forEach((k) => assert.ok(KINDS.includes(k), s.id + ' kind ' + k + ' is known'));
   }
-  assert.deepEqual(T.MOUNTAIN.landscape, ['gunung']);
+  assert.deepEqual(T.STOP_TYPES, ['post', 'water', 'camp', 'junction']);
+  const count = (k) => T.STOPS.filter((s) => s.kinds.includes(k)).length;
+  assert.equal(T.STOPS.length, 9);
+  assert.deepEqual(T.STOP_TYPES.map(count), [5, 3, 2, 2]);
+  assert.deepEqual(T.STOPS.filter((s) => s.kinds.includes('junction')).map((s) => s.id), ['panyancangan', 'kandang-badak']);
 });
 
-test('landscapeOf applies the height, climb and flat-leg thresholds', () => {
-  const steep = { legToNext: { climbM: 200 } };
-  // 800 m, 300 m above basecamp: a hill.
-  assert.deepEqual(T.landscapeOf({ elevM: 800, legToNext: { climbM: 200 } }, steep, 500), ['bukit']);
-  // 800 m but 700 m of climbing: a mountain.
-  assert.deepEqual(T.landscapeOf({ elevM: 800, legToNext: { climbM: 200 } }, steep, 100), ['gunung']);
-  // Exactly 1,000 m is a mountain.
-  assert.deepEqual(T.landscapeOf({ elevM: 1000, legToNext: null }, steep, 900), ['gunung']);
-  // Flat on both sides below 1,000 m: hill and valley.
-  assert.deepEqual(T.landscapeOf({ elevM: 600, legToNext: { climbM: 10 } }, { legToNext: { climbM: 50 } }, 550), ['bukit', 'lembah']);
-  // One steep side is not a valley.
-  assert.deepEqual(T.landscapeOf({ elevM: 600, legToNext: { climbM: 51 } }, { legToNext: { climbM: 5 } }, 550), ['bukit']);
-  // A curated landscape wins over the derived one, kept in display order.
-  assert.deepEqual(T.landscapeOf({ elevM: 2000, landscape: ['lembah', 'gunung'], legToNext: null }, null, 2000), ['gunung', 'lembah']);
+test('destination > route > stop: Gede Pangrango by Cibodas holds the nine stops', () => {
+  assert.equal(T.DESTINATIONS.length, 1);
+  const d = T.DEST_BY_ID['gede-pangrango'];
+  assert.equal(d.province, 'Jawa Barat');
+  assert.deepEqual(d.routes.map((r) => r.id), ['cibodas']);
+  const r = T.ROUTE_BY_ID.cibodas;
+  assert.equal(r.destinationId, 'gede-pangrango');
+  assert.equal(r.stops, T.STOPS, 'STOPS is the default route');
+  assert.equal(T.MOUNTAIN.id, 'gede-pangrango', 'followers keep their mountain id');
+  assert.equal(T.MOUNTAIN.routeId, 'cibodas');
+  assert.equal(T.MOUNTAIN.status, d.status, 'a route without its own status uses the destination');
+  assert.equal(T.MOUNTAIN.permits, d.permits);
+  assert.equal(T.MOUNTAIN.weather, r.weather);
+  assert.equal(T.routeOfStop('air-panas'), r);
+  assert.equal(T.routeOfStop('nowhere'), null);
+});
+
+test('every destination and route resolves, and stop ids are unique across routes', () => {
+  const seen = new Set();
+  for (const d of T.DESTINATIONS) {
+    assert.ok(d.routes.length > 0, d.id + ' has a route');
+    for (const r of d.routes) {
+      assert.equal(r.destinationId, d.id, r.id + ' points at its destination');
+      assert.equal(T.ROUTE_BY_ID[r.id], r);
+      for (let i = 0; i < r.stops.length; i++) {
+        const s = r.stops[i];
+        assert.ok(!seen.has(s.id), s.id + ' is unique');
+        seen.add(s.id);
+        if (i > 0) assert.ok(s.km > r.stops[i - 1].km, s.id + ' km ascends');
+        assert.equal(T.STOP_BY_ID[s.id], s);
+      }
+    }
+  }
+  assert.equal(seen.size, T.ALL_STOPS.length);
+});
+
+test('the existing stop ids are unchanged, so stored reports still resolve', () => {
+  assert.deepEqual(T.ALL_STOPS.map((s) => s.id), [
+    'cibodas', 'telaga-biru', 'rawa-gayonggong', 'panyancangan', 'air-panas',
+    'kandang-batu', 'kandang-badak', 'tanjakan-setan', 'puncak-gede',
+  ]);
 });

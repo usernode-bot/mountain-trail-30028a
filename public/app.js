@@ -68,11 +68,12 @@
     gunung: '<path d="M2 20l7-12 4 6 3-4 6 10z"/>',
     bukit: '<path d="M2 19c3-7 7-9 10-9s7 2 10 9z"/>',
     lembah: '<path d="M2 5c2 8 5 11 10 11s8-3 10-11"/><path d="M7 20c2-1 3 1 5 0s3 1 5 0"/>',
+    junction: '<path d="M12 21v-8"/><path d="M12 13L6 3"/><path d="M12 13l6-10"/>',
   };
   function iconSvg(name, cls) {
     return '<svg class="' + cls + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[name] + '</svg>';
   }
-  var KIND_ICON = { summit: 'summit', camp: 'tent', basecamp: 'basecamp', post: 'post', water: 'drop' };
+  var KIND_ICON = { summit: 'summit', camp: 'tent', basecamp: 'basecamp', post: 'post', water: 'drop', junction: 'junction' };
   function stopIcon(stop) {
     var order = ['summit', 'camp', 'basecamp', 'post', 'water'];
     for (var i = 0; i < order.length; i++) {
@@ -141,9 +142,9 @@
   // while reports load.
   if (navigator.serviceWorker && navigator.serviceWorker.controller) swReady = true;
   var expandedStop = null;
-  // The Trail tab's landscape filter: 'all' or a LANDSCAPES id. Not kept
+  // The Trail tab's stop-type filter: 'all' or a STOP_TYPES id. Not kept
   // between visits, so no stop is ever hidden by surprise.
-  var landscapeFilter = 'all';
+  var typeFilter = 'all';
   var lastAction = null;   // the entry behind the sent note
 
   function visibleReports() {
@@ -367,6 +368,9 @@
       climb: fmtM(MOUNTAIN.climbM),
       hours: t('trail.hours'),
     });
+    // The category belongs to the mountain, so it shows once, here.
+    var cat = $('mtn-category');
+    if (cat) cat.innerHTML = '<span>' + iconSvg(MOUNTAIN.category, 'h-4 w-4') + esc(t('ls.' + MOUNTAIN.category)) + '</span>';
     var line = $('offline-line');
     if (!navigator.onLine && usingCache) {
       line.hidden = false;
@@ -666,7 +670,7 @@
         : '');
     function openWorst() {
       expandedStop = worst.stopId;
-      if (landscapeFilter !== 'all' && STOP_BY_ID[worst.stopId].landscape.indexOf(landscapeFilter) < 0) landscapeFilter = 'all';
+      if (typeFilter !== 'all' && STOP_BY_ID[worst.stopId].kinds.indexOf(typeFilter) < 0) typeFilter = 'all';
       renderStops();
       var row = document.getElementById('stop-' + worst.stopId);
       if (row) row.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -793,40 +797,40 @@
     return c.tone === 'danger' ? ' stop-node-danger' : (c.tone === 'warn' ? ' stop-node-warn' : '');
   }
 
-  // All / Mountain / Hill / Valley above the stop list, each with its count.
-  function renderLandscapeChips() {
-    var row = $('landscape-chips');
+  // All / Post / Water / Camp / Junction above the stop list, each with
+  // the number of stops of that type on this route.
+  function renderTypeChips() {
+    var row = $('type-chips');
     if (!row) return;
-    var ids = ['all'].concat(M.LANDSCAPES);
+    var ids = ['all'].concat(M.STOP_TYPES);
     row.innerHTML = ids.map(function (id) {
-      var n = id === 'all' ? STOPS.length : STOPS.filter(function (s) { return s.landscape.indexOf(id) >= 0; }).length;
-      var on = landscapeFilter === id;
-      return '<button type="button" class="chip' + (on ? ' chip-on' : '') + '" data-landscape="' + id + '" aria-pressed="' + on + '">' +
-        (id === 'all' ? '' : iconSvg(id, 'h-4 w-4')) + esc(t('ls.' + id)) +
+      var n = id === 'all' ? STOPS.length : STOPS.filter(function (s) { return s.kinds.indexOf(id) >= 0; }).length;
+      var on = typeFilter === id;
+      return '<button type="button" class="chip' + (on ? ' chip-on' : '') + '" data-stop-type="' + id + '" aria-pressed="' + on + '">' +
+        (id === 'all' ? '' : iconSvg(KIND_ICON[id], 'h-4 w-4')) + esc(t('type.' + id)) +
         '<span class="chip-count">' + n + '</span></button>';
     }).join('');
-    Array.prototype.forEach.call(row.querySelectorAll('[data-landscape]'), function (btn) {
+    Array.prototype.forEach.call(row.querySelectorAll('[data-stop-type]'), function (btn) {
       btn.addEventListener('click', function () {
-        landscapeFilter = btn.getAttribute('data-landscape');
+        typeFilter = btn.getAttribute('data-stop-type');
         renderStops();
       });
     });
   }
 
   function renderStops() {
-    renderLandscapeChips();
+    renderTypeChips();
     var ol = $('trail-line');
     var html = '';
-    var filtering = landscapeFilter !== 'all';
-    var shown = STOPS.filter(function (s) { return !filtering || s.landscape.indexOf(landscapeFilter) >= 0; });
+    var filtering = typeFilter !== 'all';
+    var shown = STOPS.filter(function (s) { return !filtering || s.kinds.indexOf(typeFilter) >= 0; });
     ol.classList.toggle('trail-line-bare', shown.length < 2);
     if (!shown.length) {
       ol.innerHTML = '<li class="state-empty rounded-xl border border-line bg-surface">' +
-        '<p class="text-body font-semibold">' + esc(t('ls.empty.' + landscapeFilter)) + '</p>' +
-        (landscapeFilter === 'bukit' ? '<p class="text-small text-muted">' + esc(t('ls.empty.why')) + '</p>' : '') +
-        '<button type="button" class="btn-secondary" data-landscape-all>' + esc(t('ls.showAll')) + '</button></li>';
-      ol.querySelector('[data-landscape-all]').addEventListener('click', function () {
-        landscapeFilter = 'all';
+        '<p class="text-body font-semibold">' + esc(t('type.empty.' + typeFilter)) + '</p>' +
+        '<button type="button" class="btn-secondary" data-type-all>' + esc(t('type.showAll')) + '</button></li>';
+      ol.querySelector('[data-type-all]').addEventListener('click', function () {
+        typeFilter = 'all';
         renderStops();
       });
       return;
@@ -840,15 +844,15 @@
       if (s.kinds.indexOf('camp') >= 0 || s.kinds.indexOf('basecamp') >= 0) {
         facs += '<span>' + iconSvg('tent', 'h-4 w-4') + esc(t('fac.camp')) + '</span>';
       }
+      if (s.kinds.indexOf('junction') >= 0) {
+        facs += '<span class="text-muted">' + iconSvg('junction', 'h-4 w-4') + esc(t('fac.junction')) + '</span>';
+      }
       html += '<li class="stop-row" id="stop-' + s.id + '" data-stop="' + s.id + '">' +
         '<span class="stop-node' + stopTone(s) + '">' + iconSvg(stopIcon(s), 'h-5 w-5') + '</span>' +
         '<div class="stop-body">' +
         '<p class="text-body font-semibold">' + esc(s.name) + '</p>' +
         '<p class="mt-1 text-small text-muted">' + fmtM(s.elevM) + ' m, km ' + fmtKm(s.km) + '. ' + esc(tx('stop.' + s.id + '.short', s.short)) + '</p>' +
         (facs ? '<p class="fac">' + facs + '</p>' : '') +
-        '<p class="ls-line">' + s.landscape.map(function (id) {
-          return '<span>' + iconSvg(id, 'h-4 w-4') + esc(t('ls.' + id)) + '</span>';
-        }).join('') + '</p>' +
         condLineHtml(s) +
         (open ? expandedHtml(s) : '') +
         '</div></li>';

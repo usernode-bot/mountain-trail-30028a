@@ -145,9 +145,11 @@ request changes the look on purpose.
   (a signpost), water (a drop), camp (a tent), summit (a peak with a
   flag), and one per condition: wet waves, a shedding slope, a crossed-out
   drop, stacked haze lines. Landscape types: two peaks (Mountain), one
-  rounded hump (Hill), a U-shaped dip over a stream line (Valley).
-- **Filter chips:** `chip` / `chip-on` above the trail line (All, Mountain,
-  Hill, Valley, each with its count), shaped like the profile's stop chips.
+  rounded hump (Hill), a U-shaped dip over a stream line (Valley), shown
+  once beside the mountain's name.
+- **Filter chips:** `chip` / `chip-on` above the trail line (All, Post,
+  Water, Camp, Junction, each with its count of stops), shaped like the
+  profile's stop chips. A junction (a side path leaves) is a forked line.
 
 The kit is in `styles/tailwind-input.css`: colour tokens with a light and
 a dark value (named in `tailwind.config.js`), and components
@@ -221,15 +223,24 @@ Re-theme by changing the token values there, keeping every text pair at
 - Offline: a service worker (`public/sw.js`) caches the shell after one
   online visit; it never caches `/api/`. Reports made offline queue in
   `mt:queue` and replay by `client_id`, so replays are idempotent.
-- Landscape types (request #28): every stop carries `landscape`, an array of
-  `gunung` / `bukit` / `lembah` (ids never translated; labels `ls.*` in
-  i18n.js), derived in `trail-data.js` by `landscapeOf` from the request's
-  proposed thresholds (`LANDSCAPE_RULES`: gunung at 1,000 m or more, or over
-  600 m climbed from basecamp; bukit below both; lembah when every adjacent
-  leg climbs 50 m or less). A curated `landscape` array on a stop replaces
-  the derived value. The Trail tab's filter starts at All on every visit and
-  is never stored; while filtered, leg lines are hidden. The profile and the
-  Report picker are not filtered.
+- The guide is three levels deep (request #30): destination (a mountain,
+  hill or valley) > route > stop. `public/trail-data.js` declares
+  `DESTINATIONS` (each with `category`, one of `LANDSCAPES` = `gunung` /
+  `bukit` / `lembah`, plus province, peaks, status and permits), each with
+  `routes` (figures, weather, optional own status/permits, `stops`). The
+  category lives on the destination only; stops carry no category, only
+  their `kinds` (basecamp, post, water, camp, junction, summit). Stop ids are
+  unique across every route because reports store a bare `stop_id`; never
+  rename the Cibodas ids. `MOUNTAIN` and `STOPS` are views of the default
+  route (`mountainView`), so the screens and `server.js` read one shape;
+  the server validates reports against `ALL_STOPS`. Gede Pangrango by
+  Cibodas is the only destination: a destination list, route picker and
+  more mountains are later stages of #30, still to be approved.
+- The Trail tab's chips filter stops by type (`STOP_TYPES`: Post, Water,
+  Camp, Junction, plus All), each counting stops on the route. The filter
+  starts at All on every visit and is never stored; while filtered, leg
+  lines are hidden. The profile and the Report picker are not filtered.
+  The mountain's category shows once, under its name.
 - Geolocation is first asked for only on the tap of "Update my location". Once permission is granted, the
   app re-reads the position about every 20 minutes while it is open (never prompting on its own), and keeps
   the last fix and its timestamp when a read fails.
