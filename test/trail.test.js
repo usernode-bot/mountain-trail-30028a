@@ -155,6 +155,21 @@ test('every destination and route resolves, and stop ids are unique across route
   assert.equal(seen.size, T.ALL_STOPS.length);
 });
 
+test('every route may carry a known difficulty, and Cibodas is hard', () => {
+  assert.deepEqual(T.DIFFICULTIES, ['easy', 'moderate', 'hard']);
+  for (const d of T.DESTINATIONS) {
+    for (const r of d.routes) {
+      assert.ok(r.difficulty === undefined || T.DIFFICULTIES.includes(r.difficulty),
+        r.id + ' difficulty is known');
+    }
+  }
+  assert.equal(T.ROUTE_BY_ID.cibodas.difficulty, 'hard');
+  assert.equal(T.MOUNTAIN.difficulty, 'hard');
+  const copy = Object.assign({}, T.ROUTE_BY_ID.cibodas);
+  delete copy.difficulty;
+  assert.equal(T.mountainView(copy).difficulty, null, 'a route without a rating shows nothing');
+});
+
 test('the existing stop ids are unchanged, so stored reports still resolve', () => {
   assert.deepEqual(T.ALL_STOPS.map((s) => s.id), [
     'cibodas', 'telaga-biru', 'rawa-gayonggong', 'panyancangan', 'air-panas',
