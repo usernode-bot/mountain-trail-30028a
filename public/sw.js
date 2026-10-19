@@ -5,7 +5,7 @@
  * fetched from the network, never files vendored into the repo), and never
  * touches /api/.
  */
-var CACHE = 'mt-shell-v4';
+var CACHE = 'mt-shell-v5';
 var PRECACHE = [
   '/',
   '/tailwind.css',

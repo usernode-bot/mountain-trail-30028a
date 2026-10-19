@@ -152,7 +152,7 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 // the same file so a report can only name a real stop and a real condition.
 const trailData = require('./public/trail-data.js');
 const { parseLocation } = require('./lib/location.js');
-const STOP_IDS = new Set(trailData.STOPS.map((s) => s.id));
+const STOP_IDS = new Set(trailData.ALL_STOPS.map((s) => s.id));
 const CONDITION_IDS = new Set(trailData.CONDITIONS.map((c) => c.id));
 
 // trail_reports, report_flags and report_confirms are public (staging copies
