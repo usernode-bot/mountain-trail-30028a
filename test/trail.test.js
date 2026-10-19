@@ -98,3 +98,40 @@ test('formatConfirms words the count and is blank for none', () => {
   assert.equal(T.formatConfirms(3), "3 hikers say it's still there.");
   assert.equal(T.formatConfirms(24), "24 hikers say it's still there.");
 });
+
+test('every stop has landscape types: known ids, no duplicates, in display order', () => {
+  for (const s of T.STOPS) {
+    assert.ok(Array.isArray(s.landscape) && s.landscape.length > 0, s.id + ' has a landscape');
+    const order = s.landscape.map((id) => T.LANDSCAPES.indexOf(id));
+    order.forEach((o, i) => {
+      assert.ok(o >= 0, s.id + ' landscape id is known');
+      if (i > 0) assert.ok(o > order[i - 1], s.id + ' landscape is in order, no duplicates');
+    });
+  }
+  assert.deepEqual(T.LANDSCAPES, ['gunung', 'bukit', 'lembah']);
+});
+
+test('the Cibodas route: every stop is gunung, only Rawa Gayonggong is also lembah, none bukit', () => {
+  for (const s of T.STOPS) {
+    assert.ok(s.landscape.includes('gunung'), s.id + ' is gunung');
+    assert.ok(!s.landscape.includes('bukit'), s.id + ' is not bukit');
+    assert.equal(s.landscape.includes('lembah'), s.id === 'rawa-gayonggong', s.id + ' lembah');
+  }
+  assert.deepEqual(T.MOUNTAIN.landscape, ['gunung']);
+});
+
+test('landscapeOf applies the height, climb and flat-leg thresholds', () => {
+  const steep = { legToNext: { climbM: 200 } };
+  // 800 m, 300 m above basecamp: a hill.
+  assert.deepEqual(T.landscapeOf({ elevM: 800, legToNext: { climbM: 200 } }, steep, 500), ['bukit']);
+  // 800 m but 700 m of climbing: a mountain.
+  assert.deepEqual(T.landscapeOf({ elevM: 800, legToNext: { climbM: 200 } }, steep, 100), ['gunung']);
+  // Exactly 1,000 m is a mountain.
+  assert.deepEqual(T.landscapeOf({ elevM: 1000, legToNext: null }, steep, 900), ['gunung']);
+  // Flat on both sides below 1,000 m: hill and valley.
+  assert.deepEqual(T.landscapeOf({ elevM: 600, legToNext: { climbM: 10 } }, { legToNext: { climbM: 50 } }, 550), ['bukit', 'lembah']);
+  // One steep side is not a valley.
+  assert.deepEqual(T.landscapeOf({ elevM: 600, legToNext: { climbM: 51 } }, { legToNext: { climbM: 5 } }, 550), ['bukit']);
+  // A curated landscape wins over the derived one, kept in display order.
+  assert.deepEqual(T.landscapeOf({ elevM: 2000, landscape: ['lembah', 'gunung'], legToNext: null }, null, 2000), ['gunung', 'lembah']);
+});

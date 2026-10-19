@@ -3,6 +3,8 @@
  * no signal; server.js requires this same file to validate reports.
  * Heights, distances, walking times and coordinates are approximate guide
  * figures for the Cibodas route, not a survey.
+ * Each stop's landscape types (gunung / bukit / lembah) are derived here
+ * from those figures, so the app and its tests read one answer.
  */
 (function (root, factory) {
   var api = factory();
@@ -144,6 +146,41 @@
     },
   ];
 
+  // Landscape types, in display order. Ids are stable and never translated
+  // (like condition ids); labels live in i18n.js under ls.<id>.
+  var LANDSCAPES = ['gunung', 'bukit', 'lembah'];
+  // Request #28's proposed thresholds, still to be validated with the
+  // hiking community and the park. Gunung: 1,000 m or higher, or more than
+  // 600 m of climbing from basecamp. Bukit: below both. Lembah: nearly
+  // flat on both sides, every adjacent leg 50 m of climbing or less.
+  var LANDSCAPE_RULES = { gunungMinElevM: 1000, gunungMinClimbM: 600, lembahMaxLegClimbM: 50 };
+
+  // A stop's landscape types, in LANDSCAPES order. A curated
+  // stop.landscape array (a hand correction) replaces the derived value.
+  // `prev` is the stop before it on the route (null for basecamp) and
+  // `baseElevM` the route's starting height.
+  function landscapeOf(stop, prev, baseElevM) {
+    if (Array.isArray(stop.landscape)) {
+      return LANDSCAPES.filter(function (id) { return stop.landscape.indexOf(id) >= 0; });
+    }
+    var R = LANDSCAPE_RULES;
+    var climb = stop.elevM - (typeof baseElevM === 'number' ? baseElevM : stop.elevM);
+    var out = [];
+    if (stop.elevM >= R.gunungMinElevM || climb > R.gunungMinClimbM) out.push('gunung');
+    if (stop.elevM < R.gunungMinElevM && climb < R.gunungMinClimbM) out.push('bukit');
+    var legs = [];
+    if (prev && prev.legToNext) legs.push(prev.legToNext.climbM);
+    if (stop.legToNext) legs.push(stop.legToNext.climbM);
+    if (legs.length && legs.every(function (c) { return c <= R.lembahMaxLegClimbM; })) out.push('lembah');
+    return out;
+  }
+  // Filled once here so the app reads a plain array.
+  var STOP_LANDSCAPE = STOPS.map(function (s, i) {
+    return landscapeOf(s, i > 0 ? STOPS[i - 1] : null, STOPS[0].elevM);
+  });
+  STOPS.forEach(function (s, i) { s.landscape = STOP_LANDSCAPE[i]; });
+  MOUNTAIN.landscape = landscapeOf({ elevM: MOUNTAIN.summitM, legToNext: null }, null, MOUNTAIN.summitM - MOUNTAIN.climbM);
+
   var COND_BY_ID = {};
   CONDITIONS.forEach(function (c) { COND_BY_ID[c.id] = c; });
   var STOP_BY_ID = {};
@@ -200,6 +237,9 @@
     STOPS: STOPS,
     STOP_BY_ID: STOP_BY_ID,
     MIN_FROM_BASECAMP: MIN_FROM_BASECAMP,
+    LANDSCAPES: LANDSCAPES,
+    LANDSCAPE_RULES: LANDSCAPE_RULES,
+    landscapeOf: landscapeOf,
     nearestStop: nearestStop,
     formatAgo: formatAgo,
     formatConfirms: formatConfirms,

@@ -12,7 +12,9 @@ bottom:
   forecast and automatic warnings for strong wind or heavy rain on your own
   climbing days, a height profile, and the trail line from Basecamp Cibodas
   to Puncak Gede. Each of the nine stops (posts, water sources, camps) shows
-  its latest condition; tapping a stop opens its description and reports.
+  its latest condition and its landscape type (Mountain, Hill, Valley);
+  chips above the trail line filter the stops by type. Tapping a stop opens
+  its description and reports.
   A notifications section keeps you posted on status and weather changes if
   you follow the mountain.
 - **Report** — one tap on Slippery, Landslide, No water, Heavy fog, Wildlife,
