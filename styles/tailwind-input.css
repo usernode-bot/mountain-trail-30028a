@@ -296,6 +296,15 @@
      a stop's water and camp line but in muted grey. */
   .ls-line { @apply mt-1 flex gap-3 text-small text-muted; }
   .ls-line > span { @apply inline-flex items-center gap-1; }
+  /* Three rising steps beside the difficulty words: one filled for Easy,
+     two for Moderate, three for Hard. Neutral by design: amber and red
+     already mean a trail warning and a blocked path. */
+  .diff-meter { @apply inline-flex h-3 items-end gap-0.5; }
+  .diff-meter i { @apply block w-1 rounded-sm bg-line; }
+  .diff-meter i:nth-child(1) { @apply h-1; }
+  .diff-meter i:nth-child(2) { @apply h-2; }
+  .diff-meter i:nth-child(3) { @apply h-3; }
+  .diff-meter i.on { @apply bg-fg; }
   /* One stop or none left by the stop-type filter: no rail to draw. */
   .trail-line-bare::before { display: none; }
 

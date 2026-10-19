@@ -368,6 +368,23 @@
       climb: fmtM(MOUNTAIN.climbM),
       hours: t('trail.hours'),
     });
+    // The route's difficulty, on its own short line above the category.
+    // A route without a known rating shows no line at all.
+    var diff = $('mtn-difficulty');
+    if (diff) {
+      var dIdx = M.DIFFICULTIES.indexOf(MOUNTAIN.difficulty);
+      if (dIdx >= 0) {
+        var steps = '';
+        for (var i = 0; i < 3; i++) steps += '<i' + (i <= dIdx ? ' class="on"' : '') + '></i>';
+        diff.hidden = false;
+        diff.innerHTML = '<span><span class="diff-meter" aria-hidden="true">' + steps + '</span>' +
+          '<span>' + esc(t('trail.difficulty', { level: '' })) +
+          '<span class="text-fg font-medium">' + esc(t('diff.' + MOUNTAIN.difficulty)) + '</span></span></span>';
+      } else {
+        diff.hidden = true;
+        diff.innerHTML = '';
+      }
+    }
     // The category belongs to the mountain, so it shows once, here.
     var cat = $('mtn-category');
     if (cat) cat.innerHTML = '<span>' + iconSvg(MOUNTAIN.category, 'h-4 w-4') + esc(t('ls.' + MOUNTAIN.category)) + '</span>';

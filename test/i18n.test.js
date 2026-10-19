@@ -89,6 +89,18 @@ test('index.html keys exist in both dictionaries', function () {
   assert.ok(found > 20, 'expected the markup to carry i18n keys, found ' + found);
 });
 
+test('every difficulty level is translated, and the label takes the level', function () {
+  M.DIFFICULTIES.forEach(function (id) {
+    assert.ok(EN['diff.' + id], 'missing en string diff.' + id);
+    assert.ok(ID['diff.' + id], 'missing id string diff.' + id);
+  });
+  ['en', 'id'].forEach(function (lang) {
+    var s = I18N.STRINGS[lang]['trail.difficulty'];
+    assert.ok(s, 'missing trail.difficulty in ' + lang);
+    assert.strictEqual(placeholders(s), 'level', 'trail.difficulty needs {level} in ' + lang);
+  });
+});
+
 test('lookup and fallback', function () {
   assert.strictEqual(I18N.t('id', 'reports.more.one'), EN['reports.more.one']); // en-only key falls back to English
   assert.strictEqual(I18N.t('en', 'no.such.key'), 'no.such.key');

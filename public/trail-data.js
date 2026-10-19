@@ -70,6 +70,7 @@
     hoursUp: '5 to 7',
     hoursUpMin: 5,
     hoursUpMax: 7,
+    difficulty: 'hard', // 'easy' | 'moderate' | 'hard', see DIFFICULTIES; approximate guide figure
     // A route may carry its own status or permits; when it does, they
     // replace the destination's. Cibodas uses the destination's.
     status: null,
@@ -182,6 +183,9 @@
   // The stop types the Trail tab filters by, in chip order. Basecamp and
   // summit show under All only.
   var STOP_TYPES = ['post', 'water', 'camp', 'junction'];
+  // Route difficulty, easiest first. A route's optional difficulty is one of
+  // these ids; labels live in i18n.js under diff.<id>.
+  var DIFFICULTIES = ['easy', 'moderate', 'hard'];
 
   CIBODAS.stops = CIBODAS_STOPS;
   GEDE_PANGRANGO.routes = [CIBODAS];
@@ -230,6 +234,7 @@
       hoursUp: route.hoursUp,
       hoursUpMin: route.hoursUpMin,
       hoursUpMax: route.hoursUpMax,
+      difficulty: route.difficulty || null,
       status: route.status || d.status,
       permits: route.permits || d.permits,
       weather: route.weather,
@@ -307,6 +312,7 @@
     MIN_FROM_BASECAMP: MIN_FROM_BASECAMP,
     LANDSCAPES: LANDSCAPES,
     STOP_TYPES: STOP_TYPES,
+    DIFFICULTIES: DIFFICULTIES,
     nearestStop: nearestStop,
     formatAgo: formatAgo,
     formatConfirms: formatConfirms,

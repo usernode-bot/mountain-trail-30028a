@@ -25,6 +25,12 @@
       "expectSelector": "#trail-line"
     },
     {
+      "name": "Trail tab shows the route difficulty",
+      "path": "/",
+      "expectText": "Difficulty: Hard",
+      "expectSelector": "#mtn-difficulty .diff-meter"
+    },
+    {
       "name": "Profile stop labels",
       "path": "/",
       "expectText": "km 0, start"
