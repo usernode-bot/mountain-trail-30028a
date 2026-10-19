@@ -241,6 +241,11 @@ Re-theme by changing the token values there, keeping every text pair at
   starts at All on every visit and is never stored; while filtered, leg
   lines are hidden. The profile and the Report picker are not filtered.
   The mountain's category shows once, under its name.
+- Each route may carry a `difficulty` (`DIFFICULTIES` = easy / moderate /
+  hard; Cibodas is hard), shown under the route description on the Trail
+  tab with a three-step mark. It is an approximate guide figure like the
+  heights and times; a route without one shows nothing, and the server
+  does not use it.
 - Geolocation is first asked for only on the tap of "Update my location". Once permission is granted, the
   app re-reads the position about every 20 minutes while it is open (never prompting on its own), and keeps
   the last fix and its timestamp when a read fails.

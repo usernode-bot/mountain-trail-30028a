@@ -368,6 +368,30 @@
       climb: fmtM(MOUNTAIN.climbM),
       hours: t('trail.hours'),
     });
+    // The route's difficulty, a plain guide figure like the heights and
+    // times. Unknown or missing: no line at all, never a placeholder. The
+    // meter is decorative; the words carry the level, so it is hidden
+    // from the screen reader.
+    var dif = $('mtn-difficulty');
+    if (dif) {
+      if (MOUNTAIN.difficulty && M.DIFFICULTIES.indexOf(MOUNTAIN.difficulty) >= 0) {
+        var meter = '<span class="diff-meter" aria-hidden="true">';
+        M.DIFFICULTIES.forEach(function (d, i) {
+          meter += '<i' + (i <= M.DIFFICULTIES.indexOf(MOUNTAIN.difficulty) ? ' class="on"' : '') + '></i>';
+        });
+        meter += '</span>';
+        // The level is marked up, so split the translated line on the
+        // placeholder with a token that survives esc().
+        var parts = t('trail.difficulty', { level: '\u0001' }).split('\u0001');
+        dif.hidden = false;
+        dif.innerHTML = '<span>' + meter + esc(parts[0]) +
+          '<span class="text-fg font-medium">' + esc(t('diff.' + MOUNTAIN.difficulty)) + '</span>' +
+          esc(parts[1] || '') + '</span>';
+      } else {
+        dif.hidden = true;
+        dif.textContent = '';
+      }
+    }
     // The category belongs to the mountain, so it shows once, here.
     var cat = $('mtn-category');
     if (cat) cat.innerHTML = '<span>' + iconSvg(MOUNTAIN.category, 'h-4 w-4') + esc(t('ls.' + MOUNTAIN.category)) + '</span>';

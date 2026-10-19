@@ -106,6 +106,19 @@ test('the category belongs to the destination, never to a stop', () => {
   for (const s of T.ALL_STOPS) assert.equal(s.landscape, undefined, s.id + ' carries no category');
 });
 
+test('route difficulty: three levels, Cibodas is hard, missing means null', () => {
+  assert.deepEqual(T.DIFFICULTIES, ['easy', 'moderate', 'hard']);
+  for (const d of T.DESTINATIONS) {
+    for (const r of d.routes) {
+      assert.ok(r.difficulty === undefined || T.DIFFICULTIES.includes(r.difficulty), r.id + ' difficulty is known');
+    }
+  }
+  assert.equal(T.ROUTE_BY_ID.cibodas.difficulty, 'hard');
+  assert.equal(T.MOUNTAIN.difficulty, 'hard');
+  const bare = T.mountainView(Object.assign({}, T.ROUTE_BY_ID.cibodas, { difficulty: undefined }));
+  assert.equal(bare.difficulty, null, 'a route without a rating carries null');
+});
+
 test('stop types: known kinds, and the chip counts count stops on the route', () => {
   const KINDS = ['basecamp', 'post', 'water', 'camp', 'junction', 'summit'];
   for (const s of T.ALL_STOPS) {
