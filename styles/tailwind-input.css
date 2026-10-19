@@ -292,6 +292,31 @@
   .fac { @apply mt-1 flex gap-3 text-small; }
   .fac > span { @apply inline-flex items-center gap-1; }
   .fac-water { color: rgb(var(--water)); }
+  /* A stop's landscape types (Mountain, Hill, Valley), like the water and
+     camp line but in muted grey. */
+  .ls-line { @apply mt-1 flex gap-3 text-small text-muted; }
+  .ls-line > span { @apply inline-flex items-center gap-1; }
+  /* One stop or none left by the landscape filter: no rail to draw. */
+  .trail-line-bare::before { display: none; }
+
+  /* The landscape filter chips above the trail line, shaped like the stop
+     chips under the profile; the picked one in the action green. */
+  .chip-row {
+    @apply mb-3 flex gap-1.5 overflow-x-auto pb-1;
+  }
+  .chip {
+    @apply inline-flex min-h-11 flex-none items-center gap-1 whitespace-nowrap rounded-full border border-line bg-surface px-2.5 text-small font-medium text-fg
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus;
+  }
+  .chip-on {
+    border-width: 2px;
+    border-color: rgb(var(--accent));
+    background: rgb(var(--accent) / 0.08);
+    color: rgb(var(--accent));
+    padding-left: 9px;
+    padding-right: 9px;
+  }
+  .chip-count { @apply font-normal text-muted; }
   /* The walk to the next stop sits on the dashed rail between the nodes:
      its padding plus the stop rows' 6 px keeps it about 12 px clear of
      both, and the 56 px indent puts it past the node with the stop text. */

@@ -65,6 +65,9 @@
     warning: '<path d="M3 20h18"/><path d="M3 20L10 6l4 7"/><circle cx="16" cy="15" r="1.6"/><circle cx="19" cy="18" r="1.2"/><circle cx="13.5" cy="17.5" r="1.2"/>',
     pin: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
     clock: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',
+    gunung: '<path d="M2 20l7-12 4 6 3-4 6 10z"/>',
+    bukit: '<path d="M2 19c3-7 7-9 10-9s7 2 10 9z"/>',
+    lembah: '<path d="M2 5c2 8 5 11 10 11s8-3 10-11"/><path d="M7 20c2-1 3 1 5 0s3 1 5 0"/>',
   };
   function iconSvg(name, cls) {
     return '<svg class="' + cls + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[name] + '</svg>';
@@ -138,6 +141,9 @@
   // while reports load.
   if (navigator.serviceWorker && navigator.serviceWorker.controller) swReady = true;
   var expandedStop = null;
+  // The Trail tab's landscape filter: 'all' or a LANDSCAPES id. Not kept
+  // between visits, so no stop is ever hidden by surprise.
+  var landscapeFilter = 'all';
   var lastAction = null;   // the entry behind the sent note
 
   function visibleReports() {
@@ -660,6 +666,7 @@
         : '');
     function openWorst() {
       expandedStop = worst.stopId;
+      if (landscapeFilter !== 'all' && STOP_BY_ID[worst.stopId].landscape.indexOf(landscapeFilter) < 0) landscapeFilter = 'all';
       renderStops();
       var row = document.getElementById('stop-' + worst.stopId);
       if (row) row.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -786,10 +793,45 @@
     return c.tone === 'danger' ? ' stop-node-danger' : (c.tone === 'warn' ? ' stop-node-warn' : '');
   }
 
+  // All / Mountain / Hill / Valley above the stop list, each with its count.
+  function renderLandscapeChips() {
+    var row = $('landscape-chips');
+    if (!row) return;
+    var ids = ['all'].concat(M.LANDSCAPES);
+    row.innerHTML = ids.map(function (id) {
+      var n = id === 'all' ? STOPS.length : STOPS.filter(function (s) { return s.landscape.indexOf(id) >= 0; }).length;
+      var on = landscapeFilter === id;
+      return '<button type="button" class="chip' + (on ? ' chip-on' : '') + '" data-landscape="' + id + '" aria-pressed="' + on + '">' +
+        (id === 'all' ? '' : iconSvg(id, 'h-4 w-4')) + esc(t('ls.' + id)) +
+        '<span class="chip-count">' + n + '</span></button>';
+    }).join('');
+    Array.prototype.forEach.call(row.querySelectorAll('[data-landscape]'), function (btn) {
+      btn.addEventListener('click', function () {
+        landscapeFilter = btn.getAttribute('data-landscape');
+        renderStops();
+      });
+    });
+  }
+
   function renderStops() {
+    renderLandscapeChips();
     var ol = $('trail-line');
     var html = '';
-    STOPS.forEach(function (s, i) {
+    var filtering = landscapeFilter !== 'all';
+    var shown = STOPS.filter(function (s) { return !filtering || s.landscape.indexOf(landscapeFilter) >= 0; });
+    ol.classList.toggle('trail-line-bare', shown.length < 2);
+    if (!shown.length) {
+      ol.innerHTML = '<li class="state-empty rounded-xl border border-line bg-surface">' +
+        '<p class="text-body font-semibold">' + esc(t('ls.empty.' + landscapeFilter)) + '</p>' +
+        (landscapeFilter === 'bukit' ? '<p class="text-small text-muted">' + esc(t('ls.empty.why')) + '</p>' : '') +
+        '<button type="button" class="btn-secondary" data-landscape-all>' + esc(t('ls.showAll')) + '</button></li>';
+      ol.querySelector('[data-landscape-all]').addEventListener('click', function () {
+        landscapeFilter = 'all';
+        renderStops();
+      });
+      return;
+    }
+    shown.forEach(function (s, i) {
       var open = expandedStop === s.id;
       var facs = '';
       if (s.kinds.indexOf('water') >= 0) {
@@ -804,10 +846,13 @@
         '<p class="text-body font-semibold">' + esc(s.name) + '</p>' +
         '<p class="mt-1 text-small text-muted">' + fmtM(s.elevM) + ' m, km ' + fmtKm(s.km) + '. ' + esc(tx('stop.' + s.id + '.short', s.short)) + '</p>' +
         (facs ? '<p class="fac">' + facs + '</p>' : '') +
+        '<p class="ls-line">' + s.landscape.map(function (id) {
+          return '<span>' + iconSvg(id, 'h-4 w-4') + esc(t('ls.' + id)) + '</span>';
+        }).join('') + '</p>' +
         condLineHtml(s) +
         (open ? expandedHtml(s) : '') +
         '</div></li>';
-      if (s.legToNext) {
+      if (s.legToNext && !filtering) {
         var leg = fmtLeg(s.legToNext);
         html += '<li class="leg-line">' + leg + '</li>';
       }
