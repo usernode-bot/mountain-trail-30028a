@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const S = require('../public/status.js');
 
 test('statusTone maps the three levels to the three tones', () => {
@@ -52,4 +54,45 @@ test('a report expires 24 hours after its last confirmation', () => {
   assert.equal(S.reportExpiresAt(created, null).toISOString(), '2026-10-16T00:00:00.000Z');
   // Garbage in, window out: a nonsense confirmation is ignored.
   assert.equal(S.reportExpiresAt(created, 'not-a-date').toISOString(), '2026-10-16T00:00:00.000Z');
+});
+
+test('packPhotoUrls keeps real http(s) photos once each', () => {
+  const urls = S.packPhotoUrls([
+    { photoUrl: 'https://app.example/app-files/a.jpg' },
+    { photoUrl: 'https://app.example/app-files/a.jpg' },
+    { photoUrl: 'http://127.0.0.1:4010/app-files/b.jpg' },
+    null,
+    {},
+    { photoUrl: null },
+    { photoUrl: 'data:image/svg+xml;base64,abc' },
+    { photoUrl: 'javascript:alert(1)' },
+  ]);
+  assert.deepEqual(urls, [
+    'https://app.example/app-files/a.jpg',
+    'http://127.0.0.1:4010/app-files/b.jpg',
+  ]);
+  assert.deepEqual(S.packPhotoUrls(null), []);
+});
+
+test('the shell file list stays in step with the worker precache', () => {
+  const sw = fs.readFileSync(path.join(__dirname, '..', 'public', 'sw.js'), 'utf8');
+  const m = sw.match(/var PRECACHE = \[([\s\S]*?)\];/);
+  assert.ok(m, 'sw.js has no PRECACHE array');
+  const listed = (m[1].match(/'([^']+)'/g) || []).map((s) => s.slice(1, -1));
+  assert.deepEqual(listed, S.SHELL_FILES);
+});
+
+test('the worker answers saved photos but never caches /api/', () => {
+  const sw = fs.readFileSync(path.join(__dirname, '..', 'public', 'sw.js'), 'utf8');
+  assert.match(sw, /var PHOTOS = 'mt-photos'/);
+  // The photo cache survives shell upgrades.
+  assert.match(sw, /k !== CACHE && k !== PHOTOS/);
+  assert.match(sw, /\/app-files\//);
+  assert.match(sw, /caches\.open\(PHOTOS\)[\s\S]{0,80}cache\.match\(req\.url\)/);
+  // The API return comes before the navigation and same-origin handlers, so
+  // an /api/ request is never answered (or cached) by the worker.
+  const apiAt = sw.indexOf("url.pathname.startsWith('/api/')");
+  const navAt = sw.indexOf("if (req.mode === 'navigate')");
+  const genericAt = sw.lastIndexOf('event.respondWith');
+  assert.ok(apiAt > -1 && navAt > apiAt && genericAt > apiAt, 'the /api/ return must come before the generic handlers');
 });

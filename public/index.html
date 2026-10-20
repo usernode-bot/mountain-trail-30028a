@@ -144,6 +144,14 @@
       <h2 class="section-label mt-6" data-i18n="weather.section">Basecamp and summit weather</h2>
       <div id="weather-card" class="card"></div>
 
+      <!-- One explicit save of today's reports and photos on top of the
+           guide that is already cached on the phone. -->
+      <h2 class="section-label mt-6" data-i18n="offline.section">Offline</h2>
+      <div id="offline-pack" class="card">
+        <div id="offline-text" aria-live="polite"></div>
+        <button type="button" id="offline-save" class="btn-secondary mt-3" data-i18n="offline.save">Save reports for offline</button>
+      </div>
+
       <figure class="mt-5">
         <div id="profile" class="text-muted"></div>
         <figcaption id="profile-ends" class="mt-1 flex justify-between text-small text-muted" aria-live="polite"></figcaption>

@@ -91,11 +91,42 @@
     return new Date(latest.getTime() + DAY_MS);
   }
 
+  // The app shell the Offline save checks before it claims reports are
+  // saved. Kept in step with PRECACHE in sw.js (test/status.test.js checks
+  // that the two lists match).
+  var SHELL_FILES = [
+    '/',
+    '/tailwind.css',
+    '/i18n.js',
+    '/app.js',
+    '/trail-data.js',
+    '/packing.js',
+    '/status.js',
+    '/share-links.js',
+  ];
+
+  // The report photos a save has to put in the photo cache: real http(s)
+  // URLs, once each. data: photos are already part of their report.
+  function packPhotoUrls(reports) {
+    var seen = {};
+    var out = [];
+    (reports || []).forEach(function (r) {
+      var url = r && r.photoUrl;
+      if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return;
+      if (seen[url]) return;
+      seen[url] = true;
+      out.push(url);
+    });
+    return out;
+  }
+
   return {
     statusTone: statusTone,
     isStatusLevel: isStatusLevel,
     weatherWarnings: weatherWarnings,
     reportExpiresAt: reportExpiresAt,
+    packPhotoUrls: packPhotoUrls,
+    SHELL_FILES: SHELL_FILES,
     WIND_KMH: WIND_KMH,
     RAIN_PCT: RAIN_PCT,
   };

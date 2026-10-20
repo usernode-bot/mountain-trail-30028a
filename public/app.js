@@ -136,6 +136,11 @@
   var failed = false;
   var usingCache = null;   // { at, now, reports } when offline
   var swReady = false;
+  var swFailed = !('serviceWorker' in navigator);
+  // The Offline section: 'idle' | 'saving' | 'saved' | 'failed'.
+  var packState = 'idle';
+  var packError = null;
+  var PHOTO_CACHE = 'mt-photos'; // matches PHOTOS in sw.js
   // A page loaded by an already-registered service worker (every visit after
   // the first) knows the shell is cached at once, so the "Guide saved for
   // offline use" line is up from the first frame and the header holds still
@@ -326,6 +331,7 @@
     renderReportsAndTrail();
     renderPermits();
     renderWeather();
+    renderOfflinePack();
     renderNotifs();
     if (picker) { buildPicker(); renderPickerHint(); }
     if (packing) renderPacking();
@@ -405,6 +411,156 @@
     if (!isFinite(d.getTime())) return '';
     var h = d.getHours(), m = d.getMinutes();
     return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+  }
+
+  // ── Offline section ────────────────────────────────────────────────────
+  // The guide files are cached by the service worker. This section adds an
+  // explicit, checked refresh of today's reports and their photos on top,
+  // for the hiker who wants them before losing signal.
+  function withTimeout(promise, ms) {
+    return new Promise(function (resolve, reject) {
+      var timer = setTimeout(function () { reject(new Error('timeout')); }, ms);
+      promise.then(function (v) { clearTimeout(timer); resolve(v); }, function (e) { clearTimeout(timer); reject(e); });
+    });
+  }
+
+  function packFailed(reason) {
+    packState = 'failed';
+    packError = reason;
+    renderOfflinePack();
+  }
+
+  async function fetchPhoto(url) {
+    try {
+      return await withTimeout(fetch(url, { mode: 'cors' }), 15000);
+    } catch (e) {
+      return await withTimeout(fetch(url, { mode: 'no-cors' }), 15000);
+    }
+  }
+
+  async function storePhoto(cache, url) {
+    if (!cache) return false;
+    try {
+      var res = await fetchPhoto(url);
+      if (!res || (!res.ok && res.type !== 'opaque')) return false;
+      await cache.put(url, res);
+      return true;
+    } catch (e) { return false; }
+  }
+
+  async function saveOffline() {
+    if (packState === 'saving') return;
+    packState = 'saving';
+    packError = null;
+    renderOfflinePack();
+    var start = nowISO();
+
+    // The shell has to be in the cache, or "saved for offline" is a lie.
+    if (swFailed || !('caches' in window) || !navigator.serviceWorker) { packFailed('worker'); return; }
+    try {
+      await withTimeout(navigator.serviceWorker.ready, 20000);
+    } catch (e) { packFailed('worker'); return; }
+    try {
+      for (var i = 0; i < ST.SHELL_FILES.length; i++) {
+        var hit = await caches.match(ST.SHELL_FILES[i]);
+        if (!hit) { packFailed('files'); return; }
+      }
+    } catch (e) { packFailed('worker'); return; }
+
+    // One page-side fetch of today's reports (the worker never answers
+    // /api/). loadReports updates the live list and only writes on success.
+    await loadReports();
+    if (failed) { packFailed('reports'); return; }
+    var cached = lsGet('reportsCache', null);
+    if (!cached || !cached.reports || cached.at < start) { packFailed('storage'); return; }
+
+    var list = visibleReports().filter(function (r) { return !r.pending; });
+    var urls = ST.packPhotoUrls(list);
+    var photos = list.filter(function (r) {
+      return typeof r.photoUrl === 'string' && r.photoUrl.indexOf('data:') === 0;
+    }).length;
+    var missed = 0;
+    var cache = null;
+    try { cache = await caches.open(PHOTO_CACHE); } catch (e) { cache = null; }
+    if (cache) {
+      var next = 0;
+      var running = 0;
+      var stored = [];
+      await new Promise(function (resolve) {
+        function pump() {
+          if (next >= urls.length && running === 0) { resolve(); return; }
+          while (running < 3 && next < urls.length) {
+            (function (url) {
+              running++;
+              storePhoto(cache, url).then(function (ok) {
+                stored.push(ok);
+                running--;
+                pump();
+              });
+            })(urls[next++]);
+          }
+        }
+        pump();
+      });
+      stored.forEach(function (ok) { if (ok) photos++; else missed++; });
+      // A new save replaces the photos of the previous one.
+      try {
+        var keep = {};
+        urls.forEach(function (u) { keep[u] = true; });
+        var keys = await cache.keys();
+        for (var k = 0; k < keys.length; k++) {
+          if (!keep[keys[k].url]) await cache.delete(keys[k]);
+        }
+      } catch (e) {}
+    } else {
+      missed = urls.length;
+    }
+
+    var record = { savedAt: nowISO(), reports: list.length, photos: photos, photosMissed: missed };
+    lsSet('offlinePack', record);
+    var read = lsGet('offlinePack', null);
+    if (!read || read.savedAt !== record.savedAt) { packFailed('storage'); return; }
+    packState = 'saved';
+    packError = null;
+    renderOfflinePack();
+  }
+
+  function renderOfflinePack() {
+    var text = $('offline-text');
+    var btn = $('offline-save');
+    if (!text || !btn) return;
+    var record = lsGet('offlinePack', null);
+    if (packState === 'idle' && record) packState = 'saved';
+    btn.disabled = packState === 'saving';
+
+    if (packState === 'saving') {
+      btn.textContent = t('offline.save');
+      text.innerHTML = '<p class="text-body">' + esc(t('offline.saving')) + '</p>';
+      return;
+    }
+    if (packState === 'saved' && record) {
+      btn.textContent = t('offline.save');
+      var saved = t('offline.saved', {
+        time: fmtClock(record.savedAt),
+        reports: tn('offline.reports', record.reports || 0),
+        photos: tn('offline.photos', record.photos || 0),
+      });
+      text.innerHTML = '<p class="flex items-center gap-1.5 text-body"><span class="text-accent">' + iconSvg('check', 'h-4 w-4') + '</span><span>' + esc(saved) + '</span></p>' +
+        '<p class="mt-1 text-small text-muted">' + esc(t('offline.savedNote')) + '</p>' +
+        (record.photosMissed > 0 ? '<p class="mt-1 text-small text-warn">' + esc(tn('offline.photosMissed', record.photosMissed)) + '</p>' : '');
+      return;
+    }
+    if (packState === 'failed') {
+      btn.textContent = t('retry');
+      var earlier = record && record.savedAt
+        ? '<p class="mt-1 text-small text-muted">' + esc(t('offline.err.earlier', { time: fmtClock(record.savedAt) })) + '</p>'
+        : '';
+      text.innerHTML = '<p class="text-body">' + esc(t('offline.err.' + (packError || 'reports'))) + '</p>' +
+        '<p class="mt-1 text-small text-muted">' + esc(t('offline.err.still')) + '</p>' + earlier;
+      return;
+    }
+    btn.textContent = t('offline.save');
+    text.innerHTML = '<p class="text-body">' + esc(t('offline.intro')) + '</p>';
   }
 
   // The official level the banner shows. In the staging demo a client-side
@@ -2035,11 +2191,17 @@
 
   // ── Offline / service worker ───────────────────────────────────────────
   function registerSw() {
-    if (!('serviceWorker' in navigator)) return;
+    if (!('serviceWorker' in navigator)) {
+      swFailed = true;
+      renderOfflinePack();
+      return;
+    }
     navigator.serviceWorker.register('/sw.js').then(function () {
       swReady = true;
       renderHeader();
     }).catch(function (e) {
+      swFailed = true;
+      renderOfflinePack();
       console.info('Mountain Trail: offline cache not registered (' + ((e && e.message) || e) + ')');
     });
   }
@@ -2076,6 +2238,7 @@
     renderPacking();
     renderPermits();
     renderWeather();
+    renderOfflinePack();
     renderLocation();
     renderShareQueue();
     if (navigator.onLine && shareQueueAll().length) {
@@ -2095,6 +2258,8 @@
       lsSet('lastStop', picker.value);
       renderPickerHint();
     });
+    var saveBtn = $('offline-save');
+    if (saveBtn) saveBtn.addEventListener('click', saveOffline);
     registerSw();
     try {
       if (window.unNative && typeof unNative.attachPullToRefresh === 'function') {

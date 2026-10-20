@@ -5,7 +5,10 @@
  * fetched from the network, never files vendored into the repo), and never
  * touches /api/.
  */
-var CACHE = 'mt-shell-v5';
+var CACHE = 'mt-shell-v6';
+// Report photos saved by the Offline section on the Trail tab. The page
+// writes this cache; the worker only reads it when the network fails.
+var PHOTOS = 'mt-photos';
 var PRECACHE = [
   '/',
   '/tailwind.css',
@@ -28,7 +31,7 @@ self.addEventListener('install', function (event) {
 self.addEventListener('activate', function (event) {
   event.waitUntil(
     caches.keys().then(function (keys) {
-      return Promise.all(keys.filter(function (k) { return k !== CACHE; }).map(function (k) {
+      return Promise.all(keys.filter(function (k) { return k !== CACHE && k !== PHOTOS; }).map(function (k) {
         return caches.delete(k);
       }));
     }).then(function () {
@@ -41,6 +44,19 @@ self.addEventListener('fetch', function (event) {
   var req = event.request;
   if (req.method !== 'GET') return;
   var url = new URL(req.url);
+
+  // Report photos (same-origin and the platform's /app-files/ URLs on
+  // another origin): network first, then the copy the Offline save put in
+  // PHOTOS. This runs before the cross-origin return.
+  if (url.pathname.indexOf('/app-files/') === 0) {
+    event.respondWith(
+      fetch(req).catch(function () {
+        return caches.open(PHOTOS).then(function (cache) { return cache.match(req.url); });
+      })
+    );
+    return;
+  }
+
   if (url.origin !== self.location.origin) return;
 
   // The API goes straight to the network, never cached: a report list from

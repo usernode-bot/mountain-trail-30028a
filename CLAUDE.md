@@ -220,6 +220,12 @@ Re-theme by changing the token values there, keeping every text pair at
 - The app ships no basecamp phone number: a wrong number in a safety app
   is worse than none. Every share message carries Indonesia's emergency
   number, 112.
+- "Save reports for offline" on the Trail tab refreshes the report
+  snapshot and stores its photos only on request. The record lives in
+  `mt:offlinePack` (`mt:demo:` in the demo) and the photos in the Cache
+  Storage `mt-photos`, both device-only and never sent. A save never
+  changes which data wins online: live reports always do. `SHELL_FILES` in
+  `public/status.js` must stay in step with `PRECACHE` in `public/sw.js`.
 - Offline: a service worker (`public/sw.js`) caches the shell after one
   online visit; it never caches `/api/`. Reports made offline queue in
   `mt:queue` and replay by `client_id`, so replays are idempotent.
