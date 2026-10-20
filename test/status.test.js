@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const S = require('../public/status.js');
 
 test('statusTone maps the three levels to the three tones', () => {
@@ -52,4 +54,42 @@ test('a report expires 24 hours after its last confirmation', () => {
   assert.equal(S.reportExpiresAt(created, null).toISOString(), '2026-10-16T00:00:00.000Z');
   // Garbage in, window out: a nonsense confirmation is ignored.
   assert.equal(S.reportExpiresAt(created, 'not-a-date').toISOString(), '2026-10-16T00:00:00.000Z');
+});
+test('packPhotoUrls keeps http(s) photos once and skips the rest', () => {
+  const urls = S.packPhotoUrls([
+    { photoUrl: 'https://app.onhomeroom.com/app-files/abc' },
+    { photoUrl: 'https://app.onhomeroom.com/app-files/abc' },
+    { photoUrl: 'http://127.0.0.1:3000/app-files/def' },
+    { photoUrl: 'data:image/svg+xml;utf8,%3Csvg%3E' },
+    { photoUrl: null },
+    { photoUrl: 'javascript:alert(1)' },
+    {},
+  ]);
+  assert.deepEqual(urls, [
+    'https://app.onhomeroom.com/app-files/abc',
+    'http://127.0.0.1:3000/app-files/def',
+  ]);
+  assert.deepEqual(S.packPhotoUrls(null), []);
+});
+
+test('the service worker precaches exactly SHELL_FILES', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'sw.js'), 'utf8');
+  const m = src.match(/var PRECACHE = \[([\s\S]*?)\];/);
+  assert.ok(m, 'sw.js declares PRECACHE');
+  const paths = [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]);
+  assert.deepEqual(paths, S.SHELL_FILES);
+});
+
+test('the service worker keeps /api/ off the cache and serves saved photos', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'sw.js'), 'utf8');
+  // /api/ is answered by the network only, before anything can respondWith.
+  assert.ok(src.includes("if (url.pathname.startsWith('/api/')) return;"));
+  assert.ok(src.indexOf("startsWith('/api/')") < src.indexOf('// Everything else same-origin'));
+  // The photo branch never answers an /api/ path.
+  const photoAt = src.indexOf("startsWith('/app-files/')");
+  assert.ok(photoAt > 0 && src.indexOf("startsWith('/api/')") < photoAt);
+  // The photo cache is named as in app.js and survives a shell upgrade.
+  assert.ok(src.includes("var PHOTOS = 'mt-photos';"));
+  assert.ok(/url\.pathname\.startsWith\('\/app-files\/'\)/.test(src));
+  assert.ok(src.includes('k !== CACHE && k !== PHOTOS'));
 });

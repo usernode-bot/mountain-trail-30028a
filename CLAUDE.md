@@ -202,6 +202,11 @@ Re-theme by changing the token values there, keeping every text pair at
   `hiker_locations`, an append-only table marked `staging:private`: no GET
   route reads it back and no hiker sees another's location. Guests and
   locations taken before this change are not sent.
+- The Offline section on the Trail tab saves today's reports and their
+  photos on demand: `mt:offlinePack` (its record) and the `mt-photos` Cache
+  Storage entry are device-only and never sent. A save never changes which
+  data wins online: live reports always do. `public/sw.js`'s `PRECACHE` and
+  `SHELL_FILES` in `public/status.js` must stay in step (tested).
 - Reports show for 24 hours. Older ones stay stored but are never
   displayed anywhere.
 - Two flags hide a report for everyone; the author's own reports are never

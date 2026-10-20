@@ -81,6 +81,35 @@
     return out;
   }
 
+  // The files the service worker precaches, in the same order. sw.js keeps
+  // its own PRECACHE array (it cannot import this module); the two lists
+  // are asserted equal in test/status.test.js.
+  var SHELL_FILES = [
+    '/',
+    '/tailwind.css',
+    '/i18n.js',
+    '/app.js',
+    '/trail-data.js',
+    '/packing.js',
+    '/status.js',
+    '/share-links.js',
+  ];
+
+  // The photo URLs an offline save should fetch: http(s) only, each once.
+  // A data: photo is already inside the report, so it needs no download.
+  function packPhotoUrls(reports) {
+    var seen = {};
+    var out = [];
+    (reports || []).forEach(function (r) {
+      var url = r && r.photoUrl;
+      if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return;
+      if (seen[url]) return;
+      seen[url] = true;
+      out.push(url);
+    });
+    return out;
+  }
+
   // A report is visible for 24 hours from its creation, and every
   // confirmation pushes that 24-hour window out again.
   function reportExpiresAt(createdAt, lastConfirmedAt) {
@@ -96,6 +125,8 @@
     isStatusLevel: isStatusLevel,
     weatherWarnings: weatherWarnings,
     reportExpiresAt: reportExpiresAt,
+    SHELL_FILES: SHELL_FILES,
+    packPhotoUrls: packPhotoUrls,
     WIND_KMH: WIND_KMH,
     RAIN_PCT: RAIN_PCT,
   };

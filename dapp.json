@@ -86,6 +86,12 @@
       "expectSelector": "#weather-card"
     },
     {
+      "name": "Trail tab offers saving reports for offline",
+      "path": "/?demo=1",
+      "expectText": "Save reports for offline",
+      "expectSelector": "#offline-save"
+    },
+    {
       "name": "Trail tab demo shows the notifications section",
       "path": "/?demo=1",
       "expectText": "Notifications",
