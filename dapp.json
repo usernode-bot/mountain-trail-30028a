@@ -21,7 +21,7 @@
   "tests": [
     {
       "name": "Trail guide renders",
-      "path": "/",
+      "path": "/#trail",
       "expectSelector": "#trail-line"
     },
     {
@@ -43,6 +43,7 @@
       "visual": true,
       "impact": [
         "public/**",
+        "lib/**",
         "server.js",
         "styles/**",
         "tailwind.config.js"
@@ -72,6 +73,21 @@
       "name": "Location demo shows a waiting message",
       "path": "/?demo=1#location",
       "expectText": "Waiting for signal"
+    },
+    {
+      "name": "Mountains catalog renders",
+      "path": "/#mountains",
+      "expectText": "Semeru"
+    },
+    {
+      "name": "Mountain guide page renders",
+      "path": "/#mountains/semeru",
+      "expectText": "Ranu Pani"
+    },
+    {
+      "name": "Catalog filters render",
+      "path": "/#mountains",
+      "expectText": "Difficulty"
     },
     {
       "name": "Trail tab demo shows the status banner, permits and weather",

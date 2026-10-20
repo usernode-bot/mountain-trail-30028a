@@ -446,6 +446,36 @@
     color: rgb(var(--accent));
   }
 
+  /* Filter chips on the Mountains tab: a pill the shape of the buttons,
+     forest green while that filter is on. */
+  .filter-chip {
+    @apply inline-flex min-h-11 items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 text-small font-medium text-fg
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus;
+  }
+  .filter-chip-on {
+    @apply border-accent bg-accent text-on-accent;
+  }
+
+  /* Open and Closed badges on a mountain row and its guide page. */
+  .badge-open,
+  .badge-closed {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-small font-medium;
+  }
+  .badge-open {
+    background: rgb(var(--accent) / 0.12);
+    color: rgb(var(--accent));
+  }
+  .badge-closed {
+    background: rgb(var(--danger) / 0.1);
+    color: rgb(var(--danger));
+  }
+
+  /* The way back from a mountain's guide page to the catalog list. */
+  .back-link {
+    @apply mb-1 inline-flex min-h-11 items-center gap-1 rounded-lg px-1 text-small font-medium text-accent
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus;
+  }
+
   /* The packing steppers' minus and plus buttons. */
   .stepper-btn {
     @apply flex h-11 w-11 flex-none items-center justify-center rounded-lg border border-line bg-surface text-body font-medium

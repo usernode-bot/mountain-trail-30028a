@@ -190,6 +190,24 @@ Re-theme by changing the token values there, keeping every text pair at
   every report's `stop_id` and `condition` against it. The stop table in
   this file's history is the source of truth; heights and distances are
   approximate, and a line on the Trail tab says so.
+- The mountain catalog lives in `public/mountain-catalog.js` (static,
+  offline, shared with `server.js` for validation). Six starter mountains;
+  new ones are added there, mountain by mountain, each linking to its own
+  stop-by-stop guide when it gets one (`guide: 'trail-data'` for Gede
+  Pangrango). The catalog is the Mountains tab, the first tab; route hashes
+  are `#mountains` and `#mountains/<id>`.
+- Corrections to the catalog: signed-in hikers submit them ("Suggest an
+  edit", fields limited to `EDITABLE_FIELDS`; routes are deliberately not
+  editable). The server stores them in `mountain_edits` (a PUBLIC table —
+  mountain facts a stranger may see), deduped by `client_id`, capped at 20
+  pending per hiker. An app admin (read from the `admins` array in
+  `dapp.json` at boot; only a boolean goes out on `/api/me`) approves or
+  rejects them. Approval writes `decided_at`/`decided_by`; the public
+  `GET /api/catalog/overrides` returns the latest approved edit per
+  (mountain, field), and the client merges them over the static data at
+  render (`effMountain`), cached in `localStorage` under `mt:catalogOverrides`
+  so the merged view survives offline. Filter choices are saved under
+  `mt:catalogFilters`. Staging seeds three fake `demo-climber-*` edits.
 - The packing checklist (`public/packing.js`), the hiker's name and the
   basecamp contact are device-only, in `localStorage` under `mt:`
   (`mt:demo:` in the demo). They are never sent to the server.

@@ -1,16 +1,18 @@
 /*
- * Mountain Trail's whole UI. Hash routing for the four tabs; the guide and
- * packing rules come from trail-data.js and packing.js; reports go through
- * the server; the checklist, last location, name and contact live only in
- * localStorage. A location taken with an account is also sent to the server
- * (queued offline, replayed on reconnect) but is shown to nobody. Every
- * class name is written as a whole literal so the precompiled Tailwind build
- * can see it.
+ * Mountain Trail's whole UI. Hash routing for the tabs; the mountain
+ * catalog comes from mountain-catalog.js (the guide and packing rules from
+ * trail-data.js and packing.js); reports go through the server; the
+ * checklist, last location, name and contact live only in localStorage.
+ * A location taken with an account is also sent to the server (queued
+ * offline, replayed on reconnect) but is shown to nobody. Every class name
+ * is written as a whole literal so the precompiled Tailwind build can see
+ * it.
  */
 (function () {
   'use strict';
 
   var M = window.MT_TRAIL;
+  var C = window.MT_CATALOG;
   var P = window.MT_PACKING;
   var S = window.MT_SHARE;
   var I18N = window.MT_I18N;
@@ -99,7 +101,7 @@
   var PAGE_DEMO = /[?&]demo=1/.test(location.search);
   try { TOKEN = new URLSearchParams(location.search).get('token') || ''; } catch (e) {}
   var demo = false; // switched on when /api/me says so
-  var ME = { user: null, guest: false, demo: false };
+  var ME = { user: null, guest: false, demo: false, admin: false };
 
   function lsGet(k, d) {
     try {
@@ -273,10 +275,10 @@
     presentSheet(wrap);
     return Promise.resolve(null);
   }
-  function askForAccount() {
+  function askForAccount(action) {
     try {
       if (window.usernode && typeof window.usernode.askForAccount === 'function') {
-        window.usernode.askForAccount({ action: t('account.report') });
+        window.usernode.askForAccount({ action: action || t('account.report') });
         return;
       }
     } catch (e) {}
@@ -327,6 +329,7 @@
     renderPermits();
     renderWeather();
     renderNotifs();
+    renderMountainsRoute();
     if (picker) { buildPicker(); renderPickerHint(); }
     if (packing) renderPacking();
     renderLocation();
@@ -337,28 +340,417 @@
   }
 
   // ── Tabs ───────────────────────────────────────────────────────────────
-  var TABS = ['trail', 'report', 'packing', 'location'];
+  var TABS = ['mountains', 'trail', 'report', 'packing', 'location'];
   function switchTab(name) {
-    if (TABS.indexOf(name) < 0) name = 'trail';
+    if (TABS.indexOf(name) < 0) name = 'mountains';
+    // Inside the Mountains tab the hash may name a guide page instead.
+    if (name === 'mountains') {
+      var mm = /^mountains\/([a-z0-9-]+)/.exec((location.hash || '').replace('#', ''));
+      currentMountain = mm && C.MOUNTAIN_BY_ID[mm[1]] ? mm[1] : null;
+    }
     TABS.forEach(function (t) {
       $('tab-' + t).hidden = t !== name;
       var btn = $('tabbtn-' + t);
       btn.classList.toggle('tab-item-on', t === name);
       btn.setAttribute('aria-selected', t === name ? 'true' : 'false');
     });
-    if (location.hash !== '#' + name) {
-      try { history.replaceState(null, '', '#' + name); } catch (e) {}
+    var wantHash = name === 'mountains' && currentMountain ? '#mountains/' + currentMountain : '#' + name;
+    if (location.hash !== wantHash) {
+      try { history.replaceState(null, '', wantHash); } catch (e) {}
     }
     lsSet('tab', name);
   }
   function tabFromHash() {
     var h = (location.hash || '').replace('#', '');
+    if (h.indexOf('mountains') === 0) return 'mountains';
     return TABS.indexOf(h) >= 0 ? h : null;
   }
   window.addEventListener('hashchange', function () {
     var t = tabFromHash();
     if (t) switchTab(t);
   });
+
+  // ── Mountains tab: the catalog of Indonesia's mountains ────────────────
+  // The catalog ships with the app (mountain-catalog.js), so the list and
+  // every guide page render with no signal. Approved corrections come from
+  // the server as a flat overlay, cached under mt:catalogOverrides and
+  // merged over the shipped values at render; nothing here can change a
+  // mountain until an admin approves it.
+  var overrides = {};      // mountainId -> { field: value }, approved only
+  var pendingEdits = [];   // the admin's review queue
+  var currentMountain = null; // the guide page open inside the tab
+  var EDIT_TOPICS = [
+    { field: 'elevM', label: 'Elevation' },
+    { field: 'difficulty', label: 'Difficulty' },
+    { field: 'duration', label: 'Duration' },
+    { field: 'status', label: 'Status (open or closed)' },
+    { field: 'permit', label: 'Permit and registration' },
+    { field: 'basecamp', label: 'Basecamp' },
+    { field: 'note', label: 'Something else' },
+  ];
+
+  var DIFF_LABEL = {}, DUR_LABEL = {}, DUR_LABEL_SHORT = {}, STATUS_LABEL = {}, ISLAND_NAME = {};
+  C.DIFFICULTIES.forEach(function (d) { DIFF_LABEL[d.id] = d.label; });
+  C.DURATIONS.forEach(function (d) {
+    DUR_LABEL[d.id] = d.label + ' (' + d.local + ')';
+    DUR_LABEL_SHORT[d.id] = d.label;
+  });
+  C.STATUSES.forEach(function (s) { STATUS_LABEL[s.id] = s.label; });
+  C.ISLANDS.forEach(function (i) { ISLAND_NAME[i.id] = i.name; });
+
+  // A mountain as the catalog shows it: shipped values with the approved
+  // overlay merged on top.
+  function effMountain(id) {
+    var m = C.MOUNTAIN_BY_ID[id];
+    if (!m) return null;
+    var ov = overrides[id];
+    if (!ov) return m;
+    var out = {};
+    Object.keys(m).forEach(function (k) { out[k] = m[k]; });
+    var e = parseInt(ov.elevM, 10);
+    if (isFinite(e) && e > 999 && e < 5001) out.elevM = e;
+    if (DIFF_LABEL[ov.difficulty]) out.difficulty = ov.difficulty;
+    if (DUR_LABEL_SHORT[ov.duration]) out.duration = ov.duration;
+    if (STATUS_LABEL[ov.status]) out.status = ov.status;
+    if (typeof ov.permit === 'string' && ov.permit) out.permit = ov.permit;
+    if (typeof ov.basecamp === 'string' && ov.basecamp) out.basecamp = ov.basecamp;
+    out.climberNote = typeof ov.note === 'string' && ov.note ? ov.note : '';
+    return out;
+  }
+
+  // Grouped by island, and by province then height within an island.
+  function sortedMountains() {
+    return C.MOUNTAINS.slice().sort(function (a, b) {
+      var A = effMountain(a.id), B = effMountain(b.id);
+      if (A.province !== B.province) return A.province < B.province ? -1 : 1;
+      return B.elevM - A.elevM;
+    });
+  }
+
+  function catalogFiltersAll() {
+    var f = lsGet('catalogFilters', null);
+    if (!f || typeof f !== 'object') f = {};
+    return {
+      island: f.island || '',
+      province: f.province || '',
+      difficulty: f.difficulty || '',
+      duration: f.duration || '',
+      status: f.status || '',
+      search: f.search || '',
+    };
+  }
+  function catalogFiltersSave(f) { lsSet('catalogFilters', f); }
+
+  function filteredMountains() {
+    var f = catalogFiltersAll();
+    var q = (f.search || '').trim().toLowerCase();
+    return sortedMountains().filter(function (m) {
+      var e = effMountain(m.id);
+      if (f.island && e.island !== f.island) return false;
+      if (f.province && e.province !== f.province) return false;
+      if (f.difficulty && e.difficulty !== f.difficulty) return false;
+      if (f.duration && e.duration !== f.duration) return false;
+      if (f.status && e.status !== f.status) return false;
+      if (q && (e.name + ' ' + e.province + ' ' + (ISLAND_NAME[e.island] || '')).toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    });
+  }
+
+  function setFilter(key, value) {
+    var f = catalogFiltersAll();
+    f[key] = value;
+    if (key === 'island') f.province = ''; // a province lives on one island
+    catalogFiltersSave(f);
+    renderCatalogAll();
+  }
+
+  function menuItemsFor(key) {
+    var items = [{ label: 'All', value: '' }];
+    var f = catalogFiltersAll();
+    if (key === 'island') {
+      C.ISLANDS.forEach(function (i) { items.push({ label: i.name, value: i.id }); });
+    } else if (key === 'province') {
+      var provs = [];
+      sortedMountains().forEach(function (m) {
+        if ((!f.island || m.island === f.island) && provs.indexOf(m.province) < 0) provs.push(m.province);
+      });
+      provs.sort().forEach(function (p) { items.push({ label: p, value: p }); });
+    } else if (key === 'difficulty') {
+      C.DIFFICULTIES.forEach(function (d) { items.push({ label: d.label, value: d.id }); });
+    } else if (key === 'duration') {
+      C.DURATIONS.forEach(function (d) { items.push({ label: DUR_LABEL[d.id], value: d.id }); });
+    } else if (key === 'status') {
+      C.STATUSES.forEach(function (s) { items.push({ label: s.label, value: s.id }); });
+    }
+    return items;
+  }
+
+  function chipMenu(key, anchorEl) {
+    var items = menuItemsFor(key).map(function (it) {
+      return { label: it.label, handler: function () { setFilter(key, it.value); } };
+    });
+    rowMenu(anchorEl, 'Filter by ' + (key === 'island' ? 'island' : key), items);
+  }
+
+  function renderChips() {
+    var f = catalogFiltersAll();
+    var defs = [
+      { key: 'island', label: 'Island' },
+      { key: 'province', label: 'Province' },
+      { key: 'difficulty', label: 'Difficulty' },
+      { key: 'duration', label: 'Duration' },
+      { key: 'status', label: 'Status' },
+    ];
+    $('filter-chips').innerHTML = defs.map(function (d) {
+      var val = f[d.key];
+      var shown = val ? (DIFF_LABEL[val] || DUR_LABEL_SHORT[val] || STATUS_LABEL[val] || ISLAND_NAME[val] || val) : '';
+      return '<button type="button" class="filter-chip' + (shown ? ' filter-chip-on' : '') + '" data-chip="' + d.key + '">' +
+        esc(d.label) + ' · ' + esc(shown || 'All') + '</button>';
+    }).join('');
+    Array.prototype.forEach.call($('filter-chips').querySelectorAll('[data-chip]'), function (btn) {
+      btn.addEventListener('click', function () { chipMenu(btn.getAttribute('data-chip'), btn); });
+    });
+  }
+
+  function mountainRowHtml(m) {
+    var e = effMountain(m.id);
+    var closed = e.status === 'closed';
+    var sub = [e.province, fmtM(e.elevM) + ' m', DIFF_LABEL[e.difficulty]];
+    if (e.duration === 'day-hike') sub.push('Day hike');
+    return '<li><button type="button" class="list-row w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" data-mountain="' + e.id + '">' +
+      iconSvg('summit', 'h-6 w-6 flex-none text-accent') +
+      '<span class="min-w-0 flex-1"><span class="block text-body font-semibold">' + esc(e.name) + '</span>' +
+      '<span class="mt-0.5 block text-small text-muted">' + esc(sub.join(' · ')) + '</span></span>' +
+      '<span class="badge-' + (closed ? 'closed' : 'open') + ' flex-none">' + (closed ? 'Closed' : 'Open') + '</span>' +
+      '</button></li>';
+  }
+
+  function renderCatalogList() {
+    var el = $('mountain-list');
+    var list = filteredMountains();
+    $('mountain-count').textContent = list.length === 1 ? '1 mountain' : list.length + ' mountains';
+    if (!list.length) {
+      el.innerHTML = '<div class="state-empty"><p class="text-body font-medium">No mountains match these filters.</p>' +
+        '<p class="text-small text-muted">Clear them to see all ' + C.MOUNTAINS.length + '.</p>' +
+        '<button type="button" id="clear-filters" class="btn-secondary mt-1">Clear filters</button></div>';
+      var b = $('clear-filters');
+      if (b) b.addEventListener('click', function () {
+        catalogFiltersSave({ island: '', province: '', difficulty: '', duration: '', status: '', search: '' });
+        $('catalog-search').value = '';
+        renderCatalogAll();
+      });
+      return;
+    }
+    var html = '';
+    C.ISLANDS.forEach(function (isle) {
+      var rows = list.filter(function (m) { return m.island === isle.id; });
+      if (!rows.length) return;
+      html += '<h2 class="section-label mt-5">' + esc(isle.name) + '</h2>' +
+        '<ul class="list">' + rows.map(mountainRowHtml).join('') + '</ul>';
+    });
+    el.innerHTML = html;
+    Array.prototype.forEach.call(el.querySelectorAll('[data-mountain]'), function (btn) {
+      btn.addEventListener('click', function () { openMountain(btn.getAttribute('data-mountain')); });
+    });
+  }
+
+  // The admin's review queue, above the catalog. Everybody else sees nothing
+  // here: the server only answers it for a name in dapp.json's admins list.
+  function renderAdminCard() {
+    var el = $('admin-card');
+    if (!ME.admin || !pendingEdits.length) { el.hidden = true; el.innerHTML = ''; return; }
+    el.hidden = false;
+    el.innerHTML = '<h2 class="section-label mt-4">Review edits</h2><ul class="list">' +
+      pendingEdits.map(function (ed) {
+        var m = C.MOUNTAIN_BY_ID[ed.mountainId];
+        var topic = EDIT_TOPICS.filter(function (t) { return t.field === ed.field; })[0];
+        return '<li class="list-row items-start">' +
+          '<div class="min-w-0 flex-1"><p class="text-body font-medium">' + esc(m ? m.name : ed.mountainId) +
+          ' · ' + esc(topic ? topic.label : ed.field) + '</p>' +
+          '<p class="mt-0.5 break-words text-small">' + esc(ed.value) + '</p>' +
+          (ed.note ? '<p class="mt-0.5 break-words text-small text-muted">' + esc(ed.note) + '</p>' : '') +
+          '<p class="mt-0.5 text-small text-muted">' + esc(ed.username) + ', waiting for review</p></div>' +
+          '<button type="button" class="btn-secondary flex-none" data-decide="approve" data-edit="' + ed.id + '">Approve</button>' +
+          '<button type="button" class="btn-secondary flex-none" data-decide="reject" data-edit="' + ed.id + '">Reject</button>' +
+          '</li>';
+      }).join('') + '</ul>';
+    Array.prototype.forEach.call(el.querySelectorAll('[data-decide]'), function (btn) {
+      btn.addEventListener('click', function () {
+        decideEdit(Number(btn.getAttribute('data-edit')), btn.getAttribute('data-decide'));
+      });
+    });
+  }
+
+  function openMountain(id) {
+    try { history.replaceState(null, '', '#mountains/' + id); } catch (e) {}
+    currentMountain = id;
+    renderMountainsRoute();
+    window.scrollTo({ top: 0 });
+  }
+
+  function closeMountain() {
+    try { history.replaceState(null, '', '#mountains'); } catch (e) {}
+    currentMountain = null;
+    renderMountainsRoute();
+  }
+
+  function routeLine(r) {
+    return fmtKm(r.km) + ' km, +' + fmtM(r.climbM) + ' m, ' + r.hoursUp + ' hours up';
+  }
+
+  function renderMountainPage(id) {
+    var e = effMountain(id);
+    var closed = e.status === 'closed';
+    var html = '<button type="button" class="back-link" id="mtn-back">‹ Mountains</button>' +
+      '<header><h1 class="font-display text-title">' + esc(e.name) + '</h1>' +
+      '<p class="mt-1 text-body text-muted">' + esc(e.province) + ', ' + esc(C.islandName(e.island)) + ' · ' + fmtM(e.elevM) + ' m</p></header>' +
+      '<p class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5">' +
+      '<span class="badge-' + (closed ? 'closed' : 'open') + '">' + (closed ? 'Closed' : 'Open') + '</span>' +
+      (e.statusNote ? '<span class="text-small text-muted">' + esc(e.statusNote) + '</span>' : '') +
+      '</p>' +
+      '<div class="card mt-3">' +
+      '<dl><div class="flex justify-between gap-3 py-1.5"><dt class="text-small text-muted">Difficulty</dt><dd class="text-body text-right">' + esc(DIFF_LABEL[e.difficulty]) + '</dd></div>' +
+      '<div class="flex justify-between gap-3 py-1.5"><dt class="text-small text-muted">Duration</dt><dd class="text-body text-right">' + esc(DUR_LABEL[e.duration]) + '</dd></div>' +
+      '<div class="flex justify-between gap-3 py-1.5"><dt class="text-small text-muted">Basecamp</dt><dd class="text-body text-right">' + esc(e.basecamp) + '</dd></div>' +
+      '<div class="flex justify-between gap-3 py-1.5"><dt class="text-small text-muted">Permit</dt><dd class="text-body text-right">' + esc(e.permit) + '</dd></div></dl></div>' +
+      '<h2 class="section-label mt-6">Routes</h2><ul class="list">' +
+      e.routes.map(function (r) {
+        return '<li class="list-row"><div class="min-w-0 flex-1">' +
+          '<p class="text-body font-semibold">' + esc(r.name) + '</p>' +
+          '<p class="mt-0.5 text-small text-muted">' + esc(routeLine(r)) + (r.note ? '. ' + esc(r.note) : '') + '</p>' +
+          '</div></li>';
+      }).join('') + '</ul>' +
+      (e.climberNote ? '<p class="mt-2 text-small text-muted">Checked by climbers: ' + esc(e.climberNote) + '</p>' : '') +
+      '<p class="mt-2 text-small text-muted">Heights, distances and times are approximate guide figures, not a survey.</p>' +
+      '<div class="mt-3 flex flex-col gap-2">';
+    if (e.guide === 'trail-data') {
+      html += '<button type="button" id="mtn-guide-btn" class="btn-primary">Open the trail guide</button>';
+    } else {
+      html += '<p class="text-small text-muted">The stop-by-stop trail guide for this mountain is not here yet. It arrives mountain by mountain.</p>';
+    }
+    html += '<button type="button" id="mtn-edit-btn" class="btn-secondary">Suggest an edit</button></div>';
+    var wrap = $('mountain-page');
+    wrap.innerHTML = html;
+    $('mtn-back').addEventListener('click', closeMountain);
+    var gb = $('mtn-guide-btn');
+    if (gb) gb.addEventListener('click', function () { switchTab('trail'); window.scrollTo({ top: 0 }); });
+    $('mtn-edit-btn').addEventListener('click', function () { suggestEdit(id); });
+  }
+
+  function renderMountainsRoute() {
+    var onPage = !!(currentMountain && C.MOUNTAIN_BY_ID[currentMountain]);
+    if (!onPage) currentMountain = null;
+    $('catalog-view').hidden = onPage;
+    $('mountain-page').hidden = !onPage;
+    if (onPage) {
+      $('admin-card').hidden = true;
+      renderMountainPage(currentMountain);
+    } else {
+      renderCatalogAll();
+    }
+  }
+
+  function renderCatalogAll() {
+    renderAdminCard();
+    renderChips();
+    renderCatalogList();
+  }
+
+  // A correction: topic, the fix, and where the climber saw it. One tap to
+  // send, reviewed before anything shows to anyone else.
+  function suggestEdit(id) {
+    if (!ME.user) { askForAccount('suggest an edit'); return; }
+    var m = C.MOUNTAIN_BY_ID[id];
+    var wrap = document.createElement('div');
+    wrap.className = 'flex flex-col gap-3 p-4';
+    wrap.innerHTML = '<p class="font-display text-heading">Suggest an edit</p>' +
+      '<p class="text-small text-muted">For ' + esc(m.name) + '. A reviewer checks every suggestion before it shows to anyone.</p>' +
+      '<label for="edit-topic" class="block text-small font-medium">What it is about</label>' +
+      '<select id="edit-topic" class="field">' +
+      EDIT_TOPICS.map(function (t) { return '<option value="' + t.field + '">' + esc(t.label) + '</option>'; }).join('') +
+      '</select>' +
+      '<label for="edit-value" class="block text-small font-medium">The correction</label>' +
+      '<textarea id="edit-value" class="field" rows="2" maxlength="300" placeholder="e.g. The summit is 3,676 m"></textarea>' +
+      '<label for="edit-note" class="block text-small font-medium">Where you saw it, optional</label>' +
+      '<input type="text" id="edit-note" class="field" maxlength="300" placeholder="e.g. the park\'s booking page">' +
+      '<div class="flex justify-end gap-2">' +
+      '<button type="button" class="btn-secondary" data-close>Cancel</button>' +
+      '<button type="button" class="btn-primary" data-send>Send for review</button></div>' +
+      '<p class="text-small text-muted">Sent with your Homeroom name.</p>';
+    document.body.appendChild(wrap);
+    var handle = presentSheet(wrap);
+    function close() {
+      if (handle) handle.dismiss(); else wrap.remove();
+    }
+    var closeBtn = wrap.querySelector('[data-close]');
+    if (closeBtn) closeBtn.addEventListener('click', close);
+    wrap.querySelector('[data-send]').addEventListener('click', function () {
+      var body = {
+        clientId: uuid(),
+        mountainId: id,
+        field: wrap.querySelector('#edit-topic').value,
+        value: wrap.querySelector('#edit-value').value.trim().slice(0, 300),
+        note: wrap.querySelector('#edit-note').value.trim().slice(0, 300),
+      };
+      if (!body.value) { kitToast('Write the correction first.'); return; }
+      api('/api/mountains/' + id + '/edits', { method: 'POST', body: body }).then(function (res) {
+        if (res && res.ok) {
+          close();
+          kitToast('Sent for review. A reviewer checks it before it shows.');
+          if (ME.admin) loadPendingEdits();
+        } else if (res && res.status === 401) {
+          askForAccount();
+        } else if (res && res.status === 429) {
+          kitToast('You have a lot waiting already. Try again later.');
+        } else {
+          kitToast("Couldn't send it. Try again.");
+        }
+      });
+    });
+  }
+
+  async function loadOverrides() {
+    var res = null;
+    try { res = await api('/api/catalog/overrides'); } catch (e) {}
+    if (res && res.ok && res.data && res.data.overrides) {
+      overrides = res.data.overrides;
+      lsSet('catalogOverrides', { at: nowISO(), overrides: overrides });
+    } else {
+      var c = lsGet('catalogOverrides', null);
+      if (c && c.overrides) overrides = c.overrides;
+    }
+  }
+
+  async function loadPendingEdits() {
+    if (!ME.admin) return;
+    var res = null;
+    try { res = await api('/api/catalog/edits?status=pending'); } catch (e) {}
+    if (res && res.ok && res.data && res.data.edits) pendingEdits = res.data.edits;
+  }
+
+  function decideEdit(id, decision) {
+    api('/api/catalog/edits/' + id + '/' + decision, { method: 'POST' }).then(function (res) {
+      if (res && res.ok) {
+        pendingEdits = pendingEdits.filter(function (e) { return e.id !== id; });
+        kitToast(decision === 'approve' ? 'Approved. It shows for everyone now.' : 'Rejected.');
+        loadOverrides().then(renderMountainsRoute);
+      } else {
+        kitToast("Couldn't do that. Try again.");
+        renderAdminCard();
+      }
+    });
+  }
+
+  function wireCatalogSearch() {
+    var input = $('catalog-search');
+    input.value = catalogFiltersAll().search || '';
+    input.addEventListener('input', function () {
+      var f = catalogFiltersAll();
+      f.search = input.value;
+      catalogFiltersSave(f);
+      renderCatalogList();
+    });
+  }
 
   // ── Trail tab ──────────────────────────────────────────────────────────
   function renderHeader() {
@@ -2083,10 +2475,19 @@
     }
     renderReportsAndTrail();
     renderPickerHint();
+    wireCatalogSearch();
+    renderMountainsRoute(); // the shipped catalog, before anything waits on the network
     TABS.forEach(function (name) {
-      $('tabbtn-' + name).addEventListener('click', function () { switchTab(name); });
+      $('tabbtn-' + name).addEventListener('click', function () {
+        // Tapping the Mountains tab itself returns to the list, not the page
+        // the tab was last left on; the back link does that on purpose.
+        if (name === 'mountains' && currentMountain) {
+          try { history.replaceState(null, '', '#mountains'); } catch (e) {}
+        }
+        switchTab(name);
+      });
     });
-    var startTab = tabFromHash() || lsGet('tab', null) || 'trail';
+    var startTab = tabFromHash() || lsGet('tab', null) || 'mountains';
     switchTab(startTab);
     Array.prototype.forEach.call(document.querySelectorAll('.condition-button'), function (btn) {
       btn.addEventListener('click', function () { sendReport(btn.getAttribute('data-cond')); });
@@ -2106,7 +2507,16 @@
       replayQueue();
       loadReports();
       maybeShareSheet();
+      loadOverrides().then(renderMountainsRoute); // fresh approved corrections
     });
+    window.addEventListener('offline', renderHeader);
+    // Approved corrections and, for an admin, the review queue: both merge
+    // into the already-rendered catalog when they land.
+    loadOverrides().then(renderMountainsRoute);
+    loadPendingEdits().then(function () {
+      if (ME.admin && !currentMountain) renderAdminCard();
+    });
+    loadReports();
     window.addEventListener('offline', renderHeader);
     loadReports();
   }
