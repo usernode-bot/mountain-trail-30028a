@@ -15,6 +15,8 @@
   var C = window.MT_CATALOG;
   var P = window.MT_PACKING;
   var S = window.MT_SHARE;
+  var I18N = window.MT_I18N;
+  var ST = window.MT_STATUS;
   var MOUNTAIN = M.MOUNTAIN;
   var STOPS = M.STOPS;
   var STOP_BY_ID = M.STOP_BY_ID;
@@ -28,8 +30,8 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
-  function fmtM(n) { return n.toLocaleString('en-US'); }
-  function fmtKm(km) { return km % 1 === 0 ? String(km) : km.toFixed(1); }
+  function fmtM(n) { return I18N.fmtNum(LANG, n); }
+  function fmtKm(km) { return I18N.fmtKm(LANG, km); }
   function uuid() {
     if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
     return 'r-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
@@ -53,6 +55,9 @@
     landslide: '<path d="M3 20h18"/><path d="M3 20L10 6l4 7"/><circle cx="16" cy="15" r="1.6"/><circle cx="19" cy="18" r="1.2"/><circle cx="13.5" cy="17.5" r="1.2"/>',
     'no-water': '<path d="M12 3c3.5 4.5 6 7.6 6 10.5a6 6 0 0 1-12 0C6 10.6 8.5 7.5 12 3z"/><path d="M4 4l16 16"/>',
     'heavy-fog': '<path d="M8 5h9"/><path d="M4 9h16"/><path d="M3 13h14"/><path d="M6 17h15"/><path d="M9 21h8"/>',
+    wildlife: '<path d="M5 9c0-3 2.5-5 7-5s7 2 7 5-3 5-7 5-7-2-7-5z"/><path d="M12 14v3"/><path d="M8 18c1.5-1 6.5-1 8 0"/><circle cx="9" cy="8.5" r="0.75" fill="currentColor" stroke="none"/><circle cx="15" cy="8.5" r="0.75" fill="currentColor" stroke="none"/>',
+    'extreme-weather': '<path d="M5 7c2 0 2-1.5 4-1.5S11 7 13 7s2-1.5 4-1.5 2 1.5 4 1.5"/><path d="M5 12c2 0 2-1.5 4-1.5S11 12 13 12s2-1.5 4-1.5 2 1.5 4 1.5"/><path d="M5 17c2 0 2-1.5 4-1.5S11 17 13 17s2-1.5 4-1.5 2 1.5 4 1.5"/>',
+    'fallen-tree': '<path d="M4 21L20 5"/><path d="M20 5l-1.5-3"/><path d="M20 5l3 1.5"/><path d="M9 16l2 2"/><path d="M13 12l2 2"/><path d="M17 8l2 2"/>',
     check: '<path d="M5 12l5 5 9-10"/>',
     chevron: '<path d="M6 9l6 6 6-6"/>',
     camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
@@ -62,11 +67,15 @@
     warning: '<path d="M3 20h18"/><path d="M3 20L10 6l4 7"/><circle cx="16" cy="15" r="1.6"/><circle cx="19" cy="18" r="1.2"/><circle cx="13.5" cy="17.5" r="1.2"/>',
     pin: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
     clock: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',
+    gunung: '<path d="M2 20l7-12 4 6 3-4 6 10z"/>',
+    bukit: '<path d="M2 19c3-7 7-9 10-9s7 2 10 9z"/>',
+    lembah: '<path d="M2 5c2 8 5 11 10 11s8-3 10-11"/><path d="M7 20c2-1 3 1 5 0s3 1 5 0"/>',
+    junction: '<path d="M12 21v-8"/><path d="M12 13L6 3"/><path d="M12 13l6-10"/>',
   };
   function iconSvg(name, cls) {
     return '<svg class="' + cls + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[name] + '</svg>';
   }
-  var KIND_ICON = { summit: 'summit', camp: 'tent', basecamp: 'basecamp', post: 'post', water: 'drop' };
+  var KIND_ICON = { summit: 'summit', camp: 'tent', basecamp: 'basecamp', post: 'post', water: 'drop', junction: 'junction' };
   function stopIcon(stop) {
     var order = ['summit', 'camp', 'basecamp', 'post', 'water'];
     for (var i = 0; i < order.length; i++) {
@@ -76,6 +85,18 @@
   }
 
   // ── Token, demo mode and storage ───────────────────────────────────────
+  // The language is read straight from mt:lang (never through lsGet: the
+  // first render happens before /api/me says whether this is the demo, and
+  // the language is the same setting in the demo and outside it).
+  var LANG = 'en';
+  try { LANG = I18N.normalizeLang(localStorage.getItem('mt:lang')); } catch (e) {}
+  function t(key, vars) { return I18N.t(LANG, key, vars); }
+  function tn(key, n, vars) { return I18N.tn(LANG, key, n, vars); }
+  function tx(key, english) { return I18N.tx(LANG, key, english); }
+  function fmtNum(n) { return I18N.fmtNum(LANG, n); }
+  function fmtAgo(ms) { return I18N.ago(LANG, ms); }
+  function condLabel(id) { return COND_BY_ID[id] ? tx('cond.' + id + '.label', COND_BY_ID[id].label) : id; }
+  function levelLabel(level) { return t('banner.' + level); }
   var TOKEN = '';
   var PAGE_DEMO = /[?&]demo=1/.test(location.search);
   try { TOKEN = new URLSearchParams(location.search).get('token') || ''; } catch (e) {}
@@ -117,7 +138,15 @@
   var failed = false;
   var usingCache = null;   // { at, now, reports } when offline
   var swReady = false;
+  // A page loaded by an already-registered service worker (every visit after
+  // the first) knows the shell is cached at once, so the "Guide saved for
+  // offline use" line is up from the first frame and the header holds still
+  // while reports load.
+  if (navigator.serviceWorker && navigator.serviceWorker.controller) swReady = true;
   var expandedStop = null;
+  // The Trail tab's stop-type filter: 'all' or a STOP_TYPES id. Not kept
+  // between visits, so no stop is ever hidden by surprise.
+  var typeFilter = 'all';
   var lastAction = null;   // the entry behind the sent note
 
   function visibleReports() {
@@ -142,8 +171,12 @@
     }
     var n = nowDate().getTime();
     list = list.filter(function (r) {
-      var t = new Date(r.createdAt).getTime();
-      return isFinite(t) && t <= n + 60000 && n - t < 86400000;
+      var c = new Date(r.createdAt).getTime();
+      if (!isFinite(c) || c > n + 60000) return false;
+      // A report shows for 24 hours from its creation, and every
+      // "still valid" confirmation pushes that window out again.
+      var exp = r.expiresAt ? new Date(r.expiresAt).getTime() : c + 86400000;
+      return isFinite(exp) ? n < exp : n - c < 86400000;
     });
     pending.forEach(function (p) { list.push(p); });
     list.sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
@@ -245,11 +278,65 @@
   function askForAccount(action) {
     try {
       if (window.usernode && typeof window.usernode.askForAccount === 'function') {
-        window.usernode.askForAccount({ action: action || 'report a trail condition' });
+        window.usernode.askForAccount({ action: action || t('account.report') });
         return;
       }
     } catch (e) {}
-    kitToast('Make a Homeroom account to join in');
+    kitToast(t('toast.account'));
+  }
+
+  // ── Language ───────────────────────────────────────────────────────────
+  // Every static string in index.html carries its English text and a key;
+  // this walks them and applies the chosen language. English stays in the
+  // markup, so a missing script still reads.
+  function applyStaticText() {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-i18n]'), function (el) {
+      el.textContent = t(el.getAttribute('data-i18n'));
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-i18n-label]'), function (el) {
+      el.setAttribute('aria-label', t(el.getAttribute('data-i18n-label')));
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-i18n-placeholder]'), function (el) {
+      el.setAttribute('placeholder', t(el.getAttribute('data-i18n-placeholder')));
+    });
+    document.documentElement.lang = LANG;
+  }
+  var LANG_TEXT = { en: 'English', id: 'Bahasa Indonesia' };
+  function renderLangButtons() {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-lang]'), function (btn) {
+      var on = btn.getAttribute('data-lang') === LANG;
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      btn.innerHTML = on ? iconSvg('check', 'h-4 w-4') + esc(LANG_TEXT[btn.getAttribute('data-lang')]) : esc(LANG_TEXT[btn.getAttribute('data-lang')]);
+    });
+  }
+  function setLang(v) {
+    LANG = I18N.normalizeLang(v);
+    try { localStorage.setItem('mt:lang', LANG); } catch (e) {}
+    rerenderAll();
+  }
+  function wireLang() {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-lang]'), function (btn) {
+      btn.addEventListener('click', function () { setLang(btn.getAttribute('data-lang')); });
+    });
+  }
+  // The whole app switches at once, no reload. A sheet already open keeps
+  // the language it opened with; everything re-rendered uses the new one.
+  function rerenderAll() {
+    applyStaticText();
+    renderLangButtons();
+    renderHeader();
+    renderReportsAndTrail();
+    renderPermits();
+    renderWeather();
+    renderNotifs();
+    renderMountainsRoute();
+    if (picker) { buildPicker(); renderPickerHint(); }
+    if (packing) renderPacking();
+    renderLocation();
+    renderShareQueue();
+    if (lastAction) showSentNote(lastAction);
+    var status = $('loc-status');
+    if (status) status.textContent = '';
   }
 
   // ── Tabs ───────────────────────────────────────────────────────────────
@@ -667,13 +754,39 @@
 
   // ── Trail tab ──────────────────────────────────────────────────────────
   function renderHeader() {
+    $('mtn-route').textContent = t('trail.route', {
+      elev: fmtM(MOUNTAIN.summitM),
+      km: fmtKm(MOUNTAIN.lengthKm),
+      climb: fmtM(MOUNTAIN.climbM),
+      hours: t('trail.hours'),
+    });
+    // The route's difficulty, on its own short line above the category.
+    // A route without a known rating shows no line at all.
+    var diff = $('mtn-difficulty');
+    if (diff) {
+      var dIdx = M.DIFFICULTIES.indexOf(MOUNTAIN.difficulty);
+      if (dIdx >= 0) {
+        var steps = '';
+        for (var i = 0; i < 3; i++) steps += '<i' + (i <= dIdx ? ' class="on"' : '') + '></i>';
+        diff.hidden = false;
+        diff.innerHTML = '<span><span class="diff-meter" aria-hidden="true">' + steps + '</span>' +
+          '<span>' + esc(t('trail.difficulty', { level: '' })) +
+          '<span class="text-fg font-medium">' + esc(t('diff.' + MOUNTAIN.difficulty)) + '</span></span></span>';
+      } else {
+        diff.hidden = true;
+        diff.innerHTML = '';
+      }
+    }
+    // The category belongs to the mountain, so it shows once, here.
+    var cat = $('mtn-category');
+    if (cat) cat.innerHTML = '<span>' + iconSvg(MOUNTAIN.category, 'h-4 w-4') + esc(t('ls.' + MOUNTAIN.category)) + '</span>';
     var line = $('offline-line');
     if (!navigator.onLine && usingCache) {
       line.hidden = false;
-      line.innerHTML = iconSvg('clock', 'h-4 w-4') + ' Offline. Reports from ' + fmtClock(usingCache.at);
+      line.innerHTML = iconSvg('clock', 'h-4 w-4') + ' ' + esc(t('trail.offline', { time: fmtClock(usingCache.at) }));
     } else if (swReady) {
       line.hidden = false;
-      line.innerHTML = '<span class="text-accent">' + iconSvg('check', 'h-4 w-4') + '</span> Guide saved for offline use';
+      line.innerHTML = '<span class="text-accent">' + iconSvg('check', 'h-4 w-4') + '</span> ' + esc(t('trail.saved'));
     } else {
       line.hidden = true;
       line.textContent = '';
@@ -686,7 +799,220 @@
     return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
   }
 
-  function renderStatus() {
+  // The official level the banner shows. In the staging demo a client-side
+    // override turns it "limited / bad weather" so the banner's warning look
+    // can be seen; the plain route keeps the shipped "open".
+    function shownStatus() {
+      var s = MOUNTAIN.status || { level: 'open', reason: null, updatedAt: null, verified: true };
+      if (demo) {
+        var o = lsGet('statusOverride', null);
+        if (o && ST.isStatusLevel(o.level)) {
+          return { level: o.level, reason: o.reason || null, updatedAt: s.updatedAt, checkedAt: s.checkedAt, verified: s.verified };
+        }
+      }
+      return s;
+    }
+    function statusSig() {
+      var s = shownStatus();
+      return s.level + ':' + (s.reason || '') + ':' + (s.updatedAt || '');
+    }
+    function quotaSig() {
+      var p = MOUNTAIN.permits;
+      return p ? (p.quotaDaily + ':' + (p.checkedAt || '')) : '';
+    }
+    function weatherSig() {
+      var w = MOUNTAIN.weather;
+      return w ? (w.updatedAt || '') : '';
+    }
+
+    // ── The official status banner: Buka / Dibuka Terbatas / Ditutup ──────
+    function renderStatusBanner() {
+      var el = $('status-banner');
+      var s = shownStatus();
+      if (!s.updatedAt) { el.hidden = true; return; }
+      el.hidden = false;
+      var tone = ST.statusTone(s.level);
+      var toneClass = tone === 'danger' ? 'status-banner-danger'
+        : (tone === 'warn' ? 'status-banner-warn' : 'status-banner-accent');
+      el.className = 'status-banner ' + toneClass + ' mt-4';
+      var icon = s.level === 'open' ? 'check' : 'warning';
+      var ago = fmtAgo(nowDate().getTime() - new Date(s.updatedAt).getTime());
+      var meta = t(s.reason ? 'banner.updated' : 'banner.checked', { ago: ago });
+      var badge = s.verified ? '' : ' <span class="badge">' + esc(t('permits.notVerified')) + '</span>';
+      el.setAttribute('role', 'status');
+      el.innerHTML = iconSvg(icon, 'status-banner-icon') +
+        '<div><p class="text-body font-semibold">' + esc(levelLabel(s.level)) +
+        (s.reason ? '<span class="text-small font-normal text-muted"> · ' + esc(t('reason.' + s.reason)) + '</span>' : '') + '</p>' +
+        '<p class="text-small text-muted">' + esc(meta) + badge + '</p></div>';
+    }
+
+    // ── Permits and quota: the curated SIMAKSI facts ──────────────────────
+    function kvRow(label, value) {
+      return '<div class="kv-row"><span class="kv-label">' + label + '</span><span class="kv-value">' + value + '</span></div>';
+    }
+    function renderPermits() {
+      var el = $('permits-card');
+      var p = MOUNTAIN.permits;
+      if (!p) { el.innerHTML = ''; return; }
+      var titleKey = p.booking === 'online' ? 'permits.onlineTitle'
+        : (p.booking === 'onsite' ? 'permits.onsiteTitle' : 'permits.noneTitle');
+      var reqs = (p.requirements || []).map(function (r) { return esc(t('req.' + r)); });
+      if (p.minGroupSize) reqs.push(esc(t('permits.minGroup', { n: p.minGroupSize })));
+      var html = '<p class="text-body font-semibold">' + esc(t(titleKey)) + '</p>' +
+        '<div class="mt-1 divide-y divide-line">' +
+        kvRow(esc(t('permits.quota')), esc(t('permits.quotaValue', { n: fmtNum(p.quotaDaily) }))) +
+        kvRow(esc(t('permits.fee')), esc(t('permits.feeValue', { wd: fmtNum(p.feeWeekdayIdr), we: fmtNum(p.feeWeekendIdr) }))) +
+        kvRow(esc(t('permits.reqs')), reqs.join(', ')) +
+        '</div>';
+      if (p.booking === 'online' && p.bookingUrl) {
+        html += '<a class="btn-secondary mt-3 w-full" href="' + esc(p.bookingUrl) + '" target="_blank" rel="noopener">' + esc(t('permits.openSite')) + '</a>';
+      }
+      var checked = p.checkedAt ? esc(t('banner.checked', { ago: fmtAgo(nowDate().getTime() - new Date(p.checkedAt).getTime()) })) : '';
+      if (!p.verified) checked += ' <span class="badge">' + esc(t('permits.notVerified')) + '</span>';
+      html += '<p class="mt-3 text-small text-muted">' + checked + '</p>';
+      el.innerHTML = html;
+    }
+
+    // ── Summit weather: curated 3-day forecast, warnings highlighted ──────
+    function forecastDays(now) {
+      var locale = LANG === 'id' ? 'id-ID' : 'en-US';
+      var out = [];
+      for (var i = 0; i < 3; i++) {
+        var d = new Date(now.getTime() + i * 86400000);
+        var name = i === 0 ? t('weather.today')
+          : (i === 1 ? t('weather.tomorrow')
+            : new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(d));
+        out.push({ name: name, when: name });
+      }
+      return out;
+    }
+    function renderWeather() {
+      var el = $('weather-card');
+      var w = MOUNTAIN.weather;
+      if (!w || !Array.isArray(w.days)) { el.innerHTML = ''; return; }
+      var climbDate = lsGet('climbDate', null);
+      var now = nowDate();
+      var warnings = ST.weatherWarnings(w, climbDate, now, (packing && packing.days) || 1);
+      function cell(name, s) {
+        return '<div class="wx-cell"><p class="text-small text-muted">' + esc(name) + '</p>' +
+          '<p class="mt-0.5 text-body font-semibold">' + s.tempC + ' °C</p>' +
+          '<p class="mt-0.5 text-small text-muted">' + esc(t('weather.windKmh', { w: s.windKmh })) + '</p>' +
+          '<p class="text-small text-muted">' + esc(t('weather.rainPct', { p: s.rainPct })) + '</p></div>';
+      }
+      var dayNames = forecastDays(now);
+      function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+      var days = w.days.slice(0, 3).map(function (d, i) {
+        var warned = warnings.some(function (x) { return x.index === i; });
+        return '<div class="wx-day' + (warned ? ' wx-day-warn' : '') + '">' +
+          '<p class="wx-day-name">' + esc(cap(dayNames[i].name)) + '</p>' +
+          '<p class="mt-0.5 text-body font-semibold">' + d.tempLowC + '–' + d.tempHighC + ' °C</p>' +
+          '<p class="text-small text-muted">' + esc(t('weather.windKmh', { w: d.windKmh })) + '</p>' +
+          '<p class="text-small text-muted">' + esc(t('weather.rainPct', { p: d.rainPct })) + '</p></div>';
+      }).join('');
+      var alerts = '';
+      warnings.forEach(function (x) {
+        var d = w.days[x.index] || {};
+        var when = dayNames[x.index] ? dayNames[x.index].when : '';
+        (x.reasons || []).forEach(function (r) {
+          var text = r === 'wind'
+            ? t('weather.alert.wind', { w: d.windKmh, when: when })
+            : t('weather.alert.rain', { p: d.rainPct, when: when });
+          alerts += '<p class="wx-alert">' + iconSvg('warning', 'wx-alert-icon') + '<span>' + esc(text) + '</span></p>';
+        });
+      });
+      var html = '<div class="wx-grid">' + cell(t('weather.basecamp'), w.basecamp || {}) + cell(t('weather.summit'), w.summit || {}) + '</div>' +
+        '<p class="mt-3 text-small font-medium">' + esc(t('weather.forecast')) + '</p>' +
+        '<div class="wx-days">' + days + '</div>' +
+        alerts +
+        '<label for="climb-date" class="mb-1 mt-3 block text-small font-medium">' + esc(t('weather.climbDate')) + '</label>' +
+        '<input type="date" id="climb-date" class="field" value="' + esc(climbDate || '') + '">' +
+        '<p class="mt-1 text-small text-muted">' + esc(t('weather.climbHint')) + '</p>';
+      var updated = w.updatedAt ? esc(t('weather.updated', { ago: fmtAgo(now.getTime() - new Date(w.updatedAt).getTime()) })) : '';
+      if (!w.verified) updated += ' <span class="badge">' + esc(t('permits.notVerified')) + '</span>';
+      html += '<p class="mt-3 text-small text-muted">' + updated + '</p>' +
+        '<p class="mt-0.5 text-small text-muted">' + esc(t('weather.curated')) + '</p>';
+      el.innerHTML = html;
+      var input = $('climb-date');
+      input.addEventListener('change', function () {
+        lsSet('climbDate', input.value || null);
+        renderWeather();
+        renderNotifs();
+      });
+    }
+
+    // ── Notifications: a device-only list for followed mountains ──────────
+    function checkForNotifs() {
+      var follows = lsGet('follows', []);
+      if (follows.indexOf(MOUNTAIN.id) < 0) return;
+      var seen = lsGet('seen', null);
+      var now = nowDate();
+      var entries = [];
+      if (seen) {
+        if (seen.statusSig !== statusSig()) {
+          entries.push({ key: 'notif.statusChanged', params: { level: shownStatus().level } });
+        }
+        if (seen.quotaSig !== quotaSig()) entries.push({ key: 'notif.quotaChanged' });
+        var warned = ST.weatherWarnings(MOUNTAIN.weather, lsGet('climbDate', null), now, (packing && packing.days) || 1).length > 0;
+        if (seen.weatherSig !== weatherSig() && warned) entries.push({ key: 'notif.weatherWarning' });
+        var rn = 'n:' + visibleReports().length;
+        // A 'seed' snapshot is the baseline the demo seeds to; it starts
+        // counting from there instead of announcing everything as new.
+        if (seen.reportsSig && seen.reportsSig !== 'seed' && seen.reportsSig !== rn) {
+          var prev = Number(String(seen.reportsSig).slice(2)) || 0;
+          var added = Math.max(1, (visibleReports().length - prev));
+          entries.push(added === 1 ? { key: 'notif.newReportsOne' } : { key: 'notif.newReportsMany', params: { n: added } });
+        }
+        if (seen.reportsSig === 'seed') seen.reportsSig = rn;
+      }
+      var notifs = lsGet('notifs', []);
+      entries.forEach(function (e) {
+        var dedupe = e.key + ':' + JSON.stringify(e.params || {});
+        var exists = notifs.some(function (n) { return n.key + ':' + JSON.stringify(n.params || {}) === dedupe; });
+        if (!exists) notifs.unshift({ key: e.key, params: e.params || {}, at: now.toISOString(), read: false });
+      });
+      if (entries.length) lsSet('notifs', notifs.slice(0, 10));
+      lsSet('seen', { statusSig: statusSig(), quotaSig: quotaSig(), weatherSig: weatherSig(), reportsSig: seen && seen.reportsSig ? seen.reportsSig : 'n:' + visibleReports().length });
+      renderNotifs();
+    }
+    // Notification text is re-translated at render; the level in a
+    // statusChanged entry is stored as the raw level, not a label.
+    function notifText(n) {
+      var params = Object.assign({}, n.params);
+      if (n.key === 'notif.statusChanged' && params.level) params.level = levelLabel(params.level);
+      return t(n.key, params);
+    }
+    function renderNotifs() {
+      var follows = lsGet('follows', []);
+      var toggle = $('follow-toggle');
+      if (toggle) toggle.checked = follows.indexOf(MOUNTAIN.id) >= 0;
+      var notifs = lsGet('notifs', []);
+      var unread = notifs.filter(function (n) { return !n.read; }).length;
+      var unreadEl = $('notif-unread');
+      if (unread > 0) {
+        unreadEl.hidden = false;
+        unreadEl.textContent = t('notif.unread', { n: unread });
+      } else {
+        unreadEl.hidden = true;
+        unreadEl.textContent = '';
+      }
+      var ul = $('notif-list');
+      var btn = $('notif-read');
+      ul.hidden = false;
+      if (!notifs.length) {
+        ul.innerHTML = '<li class="state-empty"><p class="text-small text-muted">' + esc(t('notif.empty')) + '</p></li>';
+        btn.hidden = true;
+        return;
+      }
+      ul.innerHTML = notifs.map(function (n) {
+        return '<li class="list-row items-start">' +
+          '<span class="report-icon report-icon-warn">' + iconSvg('warning', 'h-4 w-4') + '</span>' +
+          '<div class="min-w-0 flex-1"><p class="text-body' + (n.read ? '' : ' font-medium') + '">' + esc(notifText(n)) + '</p>' +
+          '<p class="text-small text-muted">' + esc(fmtAgo(nowDate().getTime() - new Date(n.at).getTime())) + '</p></div></li>';
+      }).join('');
+      btn.hidden = unread === 0;
+    }
+
+    function renderStatus() {
     var el = $('status-strip');
     el.className = 'status-strip mt-4';
     el.onclick = null;
@@ -699,17 +1025,17 @@
       return;
     }
     if (failed) {
-      el.innerHTML = '<div class="flex-1"><p class="text-body">Couldn\'t load today\'s reports.</p>' +
-        '<p class="text-small text-muted">The guide, packing list and location still work.</p></div>' +
-        '<button type="button" id="status-retry" class="btn-secondary self-center">Retry</button>';
+      el.innerHTML = '<div class="flex-1"><p class="text-body">' + esc(t('err.reports')) + '</p>' +
+        '<p class="text-small text-muted">' + esc(t('err.still')) + '</p></div>' +
+        '<button type="button" id="status-retry" class="btn-secondary self-center">' + esc(t('retry')) + '</button>';
       $('status-retry').addEventListener('click', function () { loadReports(); });
       return;
     }
     var list = visibleReports();
     if (!list.length) {
       el.innerHTML = iconSvg('check', 'status-strip-icon') +
-        '<div><p class="text-body font-medium">No trail warnings in the last 24 hours</p>' +
-        '<p class="text-small text-muted">Seen something? The Report tab takes one tap.</p></div>';
+        '<div><p class="text-body font-medium">' + esc(t('strip.none')) + '</p>' +
+        '<p class="text-small text-muted">' + esc(t('strip.none.sub')) + '</p></div>';
       el.removeAttribute('role');
       return;
     }
@@ -736,18 +1062,16 @@
     if (!worst.mine && !worst.pending) {
       confirmBtn = '<button type="button" class="btn-secondary mt-2" data-confirm' +
         (worst.confirmedByMe
-          ? ' aria-pressed="true" aria-disabled="true">' + iconSvg('check', 'h-5 w-5 text-accent') + 'Masih berlaku</button>'
-          : '>Masih berlaku</button>');
+          ? ' aria-pressed="true" aria-disabled="true">' + iconSvg('check', 'h-5 w-5 text-accent') + esc(t('confirm.stillValid')) + '</button>'
+          : '>' + esc(t('confirm.stillValid')) + '</button>');
     }
     el.innerHTML = iconSvg(worst.condition === 'landslide' ? 'landslide' : worst.condition, 'status-strip-icon') +
       '<div class="min-w-0 flex-1">' +
-      '<button type="button" class="status-strip-open" aria-label="Open ' + esc(STOP_BY_ID[worst.stopId].name) + '">' +
-      '<span class="text-body font-medium">' + esc(cond.label) + ' at ' + esc(STOP_BY_ID[worst.stopId].name) + '</span></button>' +
-      '<p class="text-small text-muted">Reported by ' + (worst.mine ? 'you' : esc(worst.username)) +
-      ' at ' + esc(fmtClock(worst.createdAt)) + ', ' +
-      esc(M.formatAgo(nowDate().getTime() - new Date(worst.createdAt).getTime())) +
-      (others > 0 ? '. ' + others + ' more report' + (others === 1 ? '' : 's') + ' in the last 24 hours.' : '.') + '</p>' +
-      (worst.confirms > 0 ? '<p class="text-small text-muted">' + esc(M.formatConfirms(worst.confirms)) + '</p>' : '') +
+      '<button type="button" class="status-strip-open" aria-label="' + esc(t('strip.open', { name: STOP_BY_ID[worst.stopId].name })) + '">' +
+      '<span class="text-body font-medium">' + esc(tx('cond.' + cond.id + '.label', cond.label)) + ' ' + esc(t('strip.at')) + ' ' + esc(STOP_BY_ID[worst.stopId].name) + '</span></button>' +
+      '<p class="text-small text-muted">' + esc(t('strip.reported', { ago: I18N.ago(LANG, nowDate().getTime() - new Date(worst.createdAt).getTime()) })) +
+      (others > 0 ? '. ' + esc(tn('reports.more', others)) : '') + '.</p>' +
+      (worst.confirms > 0 ? '<p class="text-small text-muted">' + esc(tn('confirm.count', worst.confirms)) + '</p>' : '') +
       confirmBtn + '</div>' +
       (worst.photoUrl
         ? '<button type="button" class="status-strip-photo" data-photo="' + esc(worst.photoUrl) + '" aria-label="Open the photo">' +
@@ -755,6 +1079,7 @@
         : '');
     function openWorst() {
       expandedStop = worst.stopId;
+      if (typeFilter !== 'all' && STOP_BY_ID[worst.stopId].kinds.indexOf(typeFilter) < 0) typeFilter = 'all';
       renderStops();
       var row = document.getElementById('stop-' + worst.stopId);
       if (row) row.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -813,7 +1138,7 @@
     }
     var box = $('profile');
     box.innerHTML =
-      '<svg viewBox="0 0 358 80" class="block w-full" role="img" aria-label="Height profile from basecamp to summit">' +
+      '<svg viewBox="0 0 358 80" class="block w-full" role="img" aria-label="' + esc(t('profile.aria')) + '">' +
       '<line x1="0" y1="77" x2="358" y2="77" style="stroke:rgb(var(--line));stroke-width:1"/>' +
       '<polyline class="profile-line" points="' + pts + '"/>' + dots + ring + '</svg>';
     // Tapping the chart picks the stop whose dot is nearest left or right
@@ -836,7 +1161,7 @@
         (picked.id === STOPS[0].id ? 'Where the walk starts.' : 'About ' + fmtDur(MIN_FROM_BASECAMP[picked.id]) + ' from basecamp.') +
         '</p>';
     } else {
-      ends.innerHTML = '<span>Basecamp ' + fmtM(STOPS[0].elevM) + ' m</span><span>Summit ' + fmtM(eMax) + ' m</span>';
+      ends.innerHTML = '<span>' + esc(t('profile.base', { m: fmtM(STOPS[0].elevM) })) + '</span><span>' + esc(t('profile.summit', { m: fmtM(eMax) })) + '</span>';
     }
     // One chip per stop, in trail order: the labels the chart is too small
     // to carry, and the keyboard and screen-reader path to the profile.
@@ -864,14 +1189,14 @@
       return '<p class="cond-line cond-line-none"><i></i><span class="skeleton h-3.5 w-32"></span></p>';
     }
     if (!reps.length) {
-      return '<p class="cond-line cond-line-none"><i></i>No reports in 24 h</p>';
+      return '<p class="cond-line cond-line-none"><i></i>' + esc(t('stops.noreports')) + '</p>';
     }
     var rep = reps[0];
     var c = COND_BY_ID[rep.condition];
-    var extra = reps.length > 1 ? ', and ' + (reps.length - 1) + ' more' : '';
-    var waiting = rep.pending && rep.waiting ? ' · Waiting for signal' : '';
+    var extra = reps.length > 1 ? t('stops.more', { n: reps.length - 1 }) : '';
+    var waiting = rep.pending && rep.waiting ? ' · ' + t('share.section') : '';
     return '<p class="cond-line cond-line-' + (c.tone === 'danger' ? 'danger' : 'warn') + '"><i></i>' +
-      esc(c.label) + ', ' + esc(M.formatAgo(nowDate().getTime() - new Date(rep.createdAt).getTime())) + esc(extra) + esc(waiting) + '</p>';
+      esc(tx('cond.' + c.id + '.label', c.label)) + ', ' + esc(I18N.ago(LANG, nowDate().getTime() - new Date(rep.createdAt).getTime())) + esc(extra) + esc(waiting) + '</p>';
   }
 
   function stopTone(stop) {
@@ -881,28 +1206,66 @@
     return c.tone === 'danger' ? ' stop-node-danger' : (c.tone === 'warn' ? ' stop-node-warn' : '');
   }
 
+  // All / Post / Water / Camp / Junction above the stop list, each with
+  // the number of stops of that type on this route.
+  function renderTypeChips() {
+    var row = $('type-chips');
+    if (!row) return;
+    var ids = ['all'].concat(M.STOP_TYPES);
+    row.innerHTML = ids.map(function (id) {
+      var n = id === 'all' ? STOPS.length : STOPS.filter(function (s) { return s.kinds.indexOf(id) >= 0; }).length;
+      var on = typeFilter === id;
+      return '<button type="button" class="chip' + (on ? ' chip-on' : '') + '" data-stop-type="' + id + '" aria-pressed="' + on + '">' +
+        (id === 'all' ? '' : iconSvg(KIND_ICON[id], 'h-4 w-4')) + esc(t('type.' + id)) +
+        '<span class="chip-count">' + n + '</span></button>';
+    }).join('');
+    Array.prototype.forEach.call(row.querySelectorAll('[data-stop-type]'), function (btn) {
+      btn.addEventListener('click', function () {
+        typeFilter = btn.getAttribute('data-stop-type');
+        renderStops();
+      });
+    });
+  }
+
   function renderStops() {
+    renderTypeChips();
     var ol = $('trail-line');
     var html = '';
-    STOPS.forEach(function (s, i) {
+    var filtering = typeFilter !== 'all';
+    var shown = STOPS.filter(function (s) { return !filtering || s.kinds.indexOf(typeFilter) >= 0; });
+    ol.classList.toggle('trail-line-bare', shown.length < 2);
+    if (!shown.length) {
+      ol.innerHTML = '<li class="state-empty rounded-xl border border-line bg-surface">' +
+        '<p class="text-body font-semibold">' + esc(t('type.empty.' + typeFilter)) + '</p>' +
+        '<button type="button" class="btn-secondary" data-type-all>' + esc(t('type.showAll')) + '</button></li>';
+      ol.querySelector('[data-type-all]').addEventListener('click', function () {
+        typeFilter = 'all';
+        renderStops();
+      });
+      return;
+    }
+    shown.forEach(function (s, i) {
       var open = expandedStop === s.id;
       var facs = '';
       if (s.kinds.indexOf('water') >= 0) {
-        facs += '<span class="fac-water">' + iconSvg('drop', 'h-4 w-4') + 'Water</span>';
+        facs += '<span class="fac-water">' + iconSvg('drop', 'h-4 w-4') + esc(t('fac.water')) + '</span>';
       }
       if (s.kinds.indexOf('camp') >= 0 || s.kinds.indexOf('basecamp') >= 0) {
-        facs += '<span>' + iconSvg('tent', 'h-4 w-4') + 'Camp</span>';
+        facs += '<span>' + iconSvg('tent', 'h-4 w-4') + esc(t('fac.camp')) + '</span>';
+      }
+      if (s.kinds.indexOf('junction') >= 0) {
+        facs += '<span class="text-muted">' + iconSvg('junction', 'h-4 w-4') + esc(t('fac.junction')) + '</span>';
       }
       html += '<li class="stop-row" id="stop-' + s.id + '" data-stop="' + s.id + '">' +
         '<span class="stop-node' + stopTone(s) + '">' + iconSvg(stopIcon(s), 'h-5 w-5') + '</span>' +
         '<div class="stop-body">' +
         '<p class="text-body font-semibold">' + esc(s.name) + '</p>' +
-        '<p class="mt-1 text-small text-muted">' + fmtM(s.elevM) + ' m, km ' + fmtKm(s.km) + '. ' + esc(s.short) + '</p>' +
+        '<p class="mt-1 text-small text-muted">' + fmtM(s.elevM) + ' m, km ' + fmtKm(s.km) + '. ' + esc(tx('stop.' + s.id + '.short', s.short)) + '</p>' +
         (facs ? '<p class="fac">' + facs + '</p>' : '') +
         condLineHtml(s) +
         (open ? expandedHtml(s) : '') +
         '</div></li>';
-      if (s.legToNext) {
+      if (s.legToNext && !filtering) {
         var leg = fmtLeg(s.legToNext);
         html += '<li class="leg-line">' + leg + '</li>';
       }
@@ -936,20 +1299,20 @@
       var c = COND_BY_ID[r.condition];
       return '<li class="list-row items-start">' +
         '<span class="report-icon report-icon-' + (c.tone === 'danger' ? 'danger' : 'warn') + '">' + iconSvg(r.condition === 'landslide' ? 'landslide' : r.condition, 'h-4 w-4') + '</span>' +
-        '<div class="min-w-0 flex-1"><p class="text-body font-medium">' + esc(c.label) + '</p>' +
-        '<p class="text-small text-muted">' + (r.mine ? 'You' : esc(r.username)) + ', ' + esc(M.formatAgo(nowDate().getTime() - new Date(r.createdAt).getTime())) + '</p>' +
-        (r.confirms > 0 ? '<p class="text-small text-muted">' + esc(M.formatConfirms(r.confirms)) + '</p>' : '') +
+        '<div class="min-w-0 flex-1"><p class="text-body font-medium">' + esc(tx('cond.' + c.id + '.label', c.label)) + '</p>' +
+        '<p class="text-small text-muted">' + (r.mine ? esc(t('who.you')) : esc(r.username)) + ', ' + esc(I18N.ago(LANG, nowDate().getTime() - new Date(r.createdAt).getTime())) + '</p>' +
+        (r.confirms > 0 ? '<p class="text-small text-muted">' + esc(tn('confirm.count', r.confirms)) + '</p>' : '') +
         (r.note ? '<p class="mt-0.5 text-small">' + esc(r.note) + '</p>' : '') + '</div></li>';
     }).join('');
-    return '<p class="mt-2 text-body">' + esc(s.detail) + '</p>' +
-      (rows ? '<ul class="list mt-3">' + rows + '</ul>' : '<p class="mt-2 text-small text-muted">No reports here in the last 24 hours.</p>') +
-      '<button type="button" class="btn-secondary mt-3" data-report-here="' + s.id + '">Report here</button>';
+    return '<p class="mt-2 text-body">' + esc(tx('stop.' + s.id + '.detail', s.detail)) + '</p>' +
+      (rows ? '<ul class="list mt-3">' + rows + '</ul>' : '<p class="mt-2 text-small text-muted">' + esc(t('stops.noreports.here')) + '</p>') +
+      '<button type="button" class="btn-secondary mt-3" data-report-here="' + s.id + '">' + esc(t('stops.report.here')) + '</button>';
   }
 
   // "40 min", "3 h", "3 h 40 min" — the walk-time half of fmtLeg.
   function fmtDur(min) {
     var h = Math.floor(min / 60), m = min % 60;
-    return h > 0 ? (h + ' h' + (m ? ' ' + m + ' min' : '')) : m + ' min';
+    return h > 0 ? (h + ' ' + t('unit.h') + (m ? ' ' + m + ' ' + t('unit.min') : '')) : m + ' ' + t('unit.min');
   }
   function fmtLeg(leg) {
     return fmtDur(leg.min) + ', +' + fmtM(leg.climbM) + ' m';
@@ -969,12 +1332,12 @@
     if (loc) {
       var n = M.nearestStop(loc.lat, loc.lng);
       hint = n.stop.id === s.id
-        ? 'Closest stop to your last location, ' + M.formatAgo(nowDate().getTime() - new Date(loc.at).getTime())
-        : 'Your last location is closest to ' + n.stop.name;
+        ? t('pick.closest', { ago: I18N.ago(LANG, nowDate().getTime() - new Date(loc.at).getTime()) })
+        : t('pick.near', { name: n.stop.name });
     } else if (lsGet('lastStop', null) && STOP_BY_ID[lsGet('lastStop', null)]) {
-      hint = 'The stop you reported from last time';
+      hint = t('pick.last');
     } else {
-      hint = 'Basecamp, where the route starts';
+      hint = t('pick.base');
     }
     $('picker-hint').textContent = hint;
   }
@@ -1062,7 +1425,7 @@
     if (status >= 400 && status < 500 && status !== 401) {
       var i2 = pending.indexOf(entry);
       if (i2 >= 0) pending.splice(i2, 1);
-      kitToast('That report could not be sent. Try again.');
+      kitToast(t('toast.sendfail'));
       renderReportsAndTrail();
       return true;
     }
@@ -1102,15 +1465,14 @@
 
   function showSentNote(entry) {
     var el = $('sent-note');
-    var cond = COND_BY_ID[entry.condition];
     var stop = STOP_BY_ID[entry.stopId];
     el.hidden = false;
-    el.innerHTML = '<p class="text-body font-semibold">' + esc(cond.label) + ' at ' + esc(stop.name) + ' reported.</p>' +
-      '<p class="mt-0.5 text-small text-muted">' + (entry.waiting ? 'Kept on this phone. It sends when the signal is back.' : 'Other hikers see it on the trail now.') + '</p>' +
+    el.innerHTML = '<p class="text-body font-semibold">' + esc(t('sent.title', { cond: tx('cond.' + cond.id + '.label', cond.label), stop: stop.name })) + '</p>' +
+      '<p class="mt-0.5 text-small text-muted">' + esc(entry.waiting ? t('sent.waiting') : t('sent.live')) + '</p>' +
       '<div class="mt-3 flex flex-wrap items-center gap-2">' +
-      '<button type="button" class="btn-secondary" data-act="photo">' + iconSvg('camera', 'h-5 w-5') + 'Add photo</button>' +
-      '<button type="button" class="btn-secondary" data-act="note">' + iconSvg('note', 'h-5 w-5') + 'Add note</button>' +
-      '<button type="button" class="btn-text" data-act="undo">Undo</button></div>';
+      '<button type="button" class="btn-secondary" data-act="photo">' + iconSvg('camera', 'h-5 w-5') + esc(t('act.photo')) + '</button>' +
+      '<button type="button" class="btn-secondary" data-act="note">' + iconSvg('note', 'h-5 w-5') + esc(t('act.note')) + '</button>' +
+      '<button type="button" class="btn-text" data-act="undo">' + esc(t('undo')) + '</button></div>';
     el.querySelector('[data-act="photo"]').addEventListener('click', function () { addPhoto(entry); });
     el.querySelector('[data-act="note"]').addEventListener('click', function () { addNote(entry); });
     el.querySelector('[data-act="undo"]').addEventListener('click', function () { undoEntry(entry); });
@@ -1127,9 +1489,9 @@
       try { res = await api('/api/reports/' + entry.id, { method: 'DELETE' }); } catch (e) {}
       if (res && res.ok) {
         reports = reports.filter(function (r) { return r.id !== entry.id; });
-        kitToast('Report removed');
+        kitToast(t('toast.removed'));
       } else {
-        kitToast('Couldn\'t remove the report. Try again.');
+        kitToast(t('toast.removefail'));
         return;
       }
     } else {
@@ -1152,16 +1514,16 @@
     var r = entryOrReport;
     var wrap = document.createElement('div');
     wrap.className = 'flex flex-col gap-3 p-4';
-    wrap.innerHTML = '<p class="font-display text-heading">Add a note</p>' +
-      '<textarea id="note-box" class="field" rows="3" maxlength="200" placeholder="e.g. The rope is fine, the rocks are wet"></textarea>' +
-      '<p class="text-small text-muted"><span id="note-count">0</span> of 200 characters</p>' +
+    wrap.innerHTML = '<p class="font-display text-heading">' + esc(t('note.title')) + '</p>' +
+      '<textarea id="note-box" class="field" rows="3" maxlength="200" placeholder="' + esc(t('note.ph')) + '"></textarea>' +
+      '<p class="text-small text-muted"><span id="note-count">0</span> ' + esc(t('note.count', { n: 0 }).replace(/^0 /, '')) + '</p>' +
       '<div class="flex justify-end gap-2">' +
-      '<button type="button" class="btn-secondary" data-close>Cancel</button>' +
-      '<button type="button" class="btn-primary" data-save>Save note</button></div>';
+      '<button type="button" class="btn-secondary" data-close>' + esc(t('cancel')) + '</button>' +
+      '<button type="button" class="btn-primary" data-save>' + esc(t('note.save')) + '</button></div>';
     var box = wrap.querySelector('#note-box');
     var count = wrap.querySelector('#note-count');
     box.value = r.note || '';
-    function upd() { count.textContent = String(box.value.length); }
+    function upd() { count.textContent = t('note.count', { n: box.value.length }); }
     box.addEventListener('input', upd);
     upd();
     wrap.querySelector('[data-close]').addEventListener('click', function () {
@@ -1193,7 +1555,7 @@
       ov[r.id] = Object.assign({}, ov[r.id], { note: text });
       lsSet('overrides', ov);
       renderReportsAndTrail();
-      kitToast('Note added');
+      kitToast(t('toast.note'));
       return;
     }
     api('/api/reports/' + r.id, { method: 'PATCH', body: { note: text } }).then(function (res) {
@@ -1201,9 +1563,9 @@
         var live = null;
         reports.forEach(function (x) { if (x.id === r.id) live = x; });
         if (live) live.note = res.data.report.note;
-        kitToast('Note added');
+        kitToast(t('toast.note'));
       } else {
-        kitToast('Couldn\'t add the note. Try again.');
+        kitToast(t('toast.notefail'));
       }
       renderReportsAndTrail();
     });
@@ -1213,11 +1575,11 @@
   function addPhoto(entryOrReport) {
     var r = entryOrReport;
     if (!navigator.onLine) {
-      kitToast('Photos need a connection. The report keeps its note.');
+      kitToast(t('toast.photo.offline'));
       return;
     }
     if (!window.usernode || typeof window.usernode.uploadFile !== 'function') {
-      kitToast('Photos are unavailable here. The report keeps its note.');
+      kitToast(t('toast.photo.na'));
       return;
     }
     photoTarget = r;
@@ -1242,7 +1604,7 @@
         if (r.pending) {
           // The report is still in flight; the photo rides with it once sent.
           r._photo = { url: url, id: pid };
-          kitToast('Photo attached. It sends with the report.');
+          kitToast(t('toast.photo.pending'));
           return;
         }
         if (isDemoRow(r)) {
@@ -1250,7 +1612,7 @@
           ov[r.id] = Object.assign({}, ov[r.id], { photoUrl: url });
           lsSet('overrides', ov);
           renderReportsAndTrail();
-          kitToast('Photo added');
+          kitToast(t('toast.photo'));
           return;
         }
         var res = await api('/api/reports/' + r.id, { method: 'PATCH', body: { photoUrl: url, photoId: pid } });
@@ -1258,13 +1620,13 @@
           var live = null;
           reports.forEach(function (x) { if (x.id === r.id) live = x; });
           if (live) { live.photoUrl = res.data.report.photoUrl; live.photoId = pid; }
-          kitToast('Photo added');
+          kitToast(t('toast.photo'));
         } else {
-          kitToast('Couldn\'t attach the photo. Try again.');
+          kitToast(t('toast.photofail'));
         }
         renderReportsAndTrail();
       } catch (e) {
-        kitToast('Photos are unavailable right now. The report keeps its note.');
+        kitToast(t('toast.photo.error'));
       }
     });
   }
@@ -1298,7 +1660,7 @@
       ov[r.id] = Object.assign({}, ov[r.id], { removed: true });
       lsSet('overrides', ov);
       renderReportsAndTrail();
-      kitToast('Report removed');
+      kitToast(t('toast.removed'));
       return;
     }
     api('/api/reports/' + r.id, { method: 'DELETE' }).then(function (res) {
@@ -1309,9 +1671,9 @@
           }
         } catch (e) {}
         reports = reports.filter(function (x) { return x.id !== r.id; });
-        kitToast('Report removed');
+        kitToast(t('toast.removed'));
       } else {
-        kitToast('Couldn\'t remove the report. Try again.');
+        kitToast(t('toast.removefail'));
       }
       renderReportsAndTrail();
     });
@@ -1323,17 +1685,17 @@
       ov[r.id] = Object.assign({}, ov[r.id], { flagged: true });
       lsSet('overrides', ov);
       renderReportsAndTrail();
-      kitToast('Flagged. It\'s hidden for you.');
+      kitToast(t('toast.flagged'));
       return;
     }
     api('/api/reports/' + r.id + '/flag', { method: 'POST' }).then(function (res) {
       if (res.ok) {
         reports = reports.filter(function (x) { return x.id !== r.id; });
-        kitToast('Flagged. It\'s hidden for you.');
+        kitToast(t('toast.flagged'));
       } else if (res.status === 400) {
-        kitToast('You can\'t flag your own report');
+        kitToast(t('toast.flagown'));
       } else {
-        kitToast('Couldn\'t flag the report. Try again.');
+        kitToast(t('toast.flagfail'));
       }
       renderReportsAndTrail();
     });
@@ -1344,10 +1706,12 @@
   // signal just asks to try again.
   async function confirmReport(r) {
     if (!ME.user) { askForAccount(); return; }
+    if (!navigator.onLine) { kitToast(t('confirm.offline')); return; }
     if (isDemoRow(r)) {
       var dov = lsGet('overrides', {});
       dov[r.id] = Object.assign({}, dov[r.id], { confirmed: true });
       lsSet('overrides', dov);
+      kitToast(t('confirm.sent'));
       renderReportsAndTrail();
       return;
     }
@@ -1365,16 +1729,17 @@
     if (res && res.ok && res.data) {
       live.confirms = res.data.confirms;
       live.confirmedByMe = res.data.confirmedByMe !== false;
+      kitToast(t('confirm.sent'));
     } else if (res && res.status === 400) {
       live.confirmedByMe = false;
       live.confirms = prevConfirms;
-      kitToast('You can\'t confirm your own report');
+      kitToast(t('confirm.own'));
     } else if (res && res.status === 404) {
       reports = reports.filter(function (x) { return x.id !== r.id; });
     } else {
       live.confirmedByMe = false;
       live.confirms = prevConfirms;
-      kitToast('Couldn\'t confirm. Try again when you have signal.');
+      kitToast(t('confirm.fail'));
     }
     renderReportsAndTrail();
   }
@@ -1385,13 +1750,13 @@
     var items;
     if (r.mine) {
       items = [
-        { label: 'Add note', handler: function () { addNote(r); } },
-        { label: 'Add photo', handler: function () { addPhoto(r); } },
-        { label: 'Remove report', destructive: true, handler: function () { removeReport(r); } },
+        { label: t('act.note'), handler: function () { addNote(r); } },
+        { label: t('act.photo'), handler: function () { addPhoto(r); } },
+        { label: t('menu.remove'), destructive: true, handler: function () { removeReport(r); } },
       ];
     } else {
       items = [
-        { label: 'Flag as wrong or inappropriate', destructive: true, handler: function () { flagReport(r); } },
+        { label: t('menu.flag'), destructive: true, handler: function () { flagReport(r); } },
       ];
     }
     rowMenu(anchorEl, null, items);
@@ -1400,7 +1765,7 @@
   function showPhoto(url) {
     var wrap = document.createElement('div');
     wrap.className = 'p-3';
-    wrap.innerHTML = '<img src="' + esc(url) + '" alt="Report photo" style="max-height:70vh" class="w-full rounded-lg">';
+    wrap.innerHTML = '<img src="' + esc(url) + '" alt="' + esc(t('photo.alt')) + '" style="max-height:70vh" class="w-full rounded-lg">';
     presentModal(wrap);
   }
 
@@ -1408,18 +1773,30 @@
     var c = COND_BY_ID[r.condition];
     var stop = STOP_BY_ID[r.stopId];
     var tone = c.tone === 'danger' ? 'danger' : 'warn';
-    var who = r.mine ? 'You' : esc(r.username);
-    var ago = r.pending ? 'just now' : M.formatAgo(nowDate().getTime() - new Date(r.createdAt).getTime());
-    var sub = who + ', ' + ago + (r.pending && r.waiting ? ' · Waiting for signal' : '');
+    var who = r.mine ? t('who.you') : esc(r.username);
+    var ago = r.pending ? I18N.ago(LANG, 0) : I18N.ago(LANG, nowDate().getTime() - new Date(r.createdAt).getTime());
+    var sub = who + ', ' + ago + (r.pending && r.waiting ? ' · ' + t('share.section') : '');
+    var confirmLine = '';
+    if (!r.pending && !r.mine) {
+      if (r.confirmedByMe) {
+        confirmLine = '<p class="mt-1 text-small font-medium text-accent">' + esc(t('confirm.you')) + '</p>';
+      } else {
+        confirmLine = '<button type="button" class="btn-text" data-confirm="' + r.id + '">' + esc(t('confirm.stillValid')) + '</button>';
+      }
+    }
+    if (r.confirms > 0) {
+      confirmLine += '<p class="mt-0.5 text-small text-muted">' + esc(tn('confirm.count', r.confirms)) + '</p>';
+    }
     return '<li class="list-row items-start" data-id="' + r.id + '">' +
-      '<span class="report-icon report-icon-' + tone + '">' + iconSvg(r.condition === 'landslide' ? 'landslide' : r.condition, 'h-5 w-5') + '</span>' +
+      '<span class="report-icon report-icon-' + tone + '">' + iconSvg(r.condition, 'h-5 w-5') + '</span>' +
       '<div class="min-w-0 flex-1">' +
-      '<p class="text-body font-semibold">' + esc(c.label) + ' at ' + esc(stop.name) + '</p>' +
-      '<p class="text-small text-muted">' + sub + '</p>' +
+      '<p class="text-body font-semibold">' + esc(tx('cond.' + c.id + '.label', c.label)) + ' ' + esc(t('strip.at')) + ' ' + esc(stop.name) + '</p>' +
+      '<p class="text-small text-muted">' + esc(sub) + '</p>' +
       (r.note ? '<p class="mt-0.5 text-small">' + esc(r.note) + '</p>' : '') +
+      confirmLine +
       '</div>' +
-      (r.photoUrl ? '<button type="button" class="report-thumb" data-photo="' + esc(r.photoUrl) + '" aria-label="Open the photo">' + iconSvg('photo', 'h-6 w-6') + '</button>' : '') +
-      '<button type="button" class="flex h-11 w-11 flex-none items-center justify-center rounded-lg text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" data-menu aria-label="Report options">' + iconSvg('dots', 'h-5 w-5') + '</button>' +
+      (r.photoUrl ? '<button type="button" class="report-thumb" data-photo="' + esc(r.photoUrl) + '" aria-label="' + esc(t('photo.open')) + '">' + iconSvg('photo', 'h-6 w-6') + '</button>' : '') +
+      '<button type="button" class="flex h-11 w-11 flex-none items-center justify-center rounded-lg text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" data-menu aria-label="' + esc(t('menu.options')) + '">' + iconSvg('dots', 'h-5 w-5') + '</button>' +
       '</li>';
   }
 
@@ -1435,9 +1812,9 @@
       return;
     }
     if (failed && !usingCache) {
-      ul.innerHTML = '<li class="state-error"><p class="text-body font-medium">Couldn\'t load today\'s reports.</p>' +
-        '<p class="text-small text-muted">The guide, packing list and location still work.</p>' +
-        '<button type="button" id="reports-retry" class="btn-secondary mt-1">Retry</button></li>';
+      ul.innerHTML = '<li class="state-error"><p class="text-body font-medium">' + esc(t('err.reports')) + '</p>' +
+        '<p class="text-small text-muted">' + esc(t('err.still')) + '</p>' +
+        '<button type="button" id="reports-retry" class="btn-secondary mt-1">' + esc(t('retry')) + '</button></li>';
       var rb = $('reports-retry');
       if (rb) rb.addEventListener('click', function () { loadReports(); });
       el.textContent = '';
@@ -1445,20 +1822,25 @@
     }
     var list = visibleReports();
     if (!list.length) {
-      ul.innerHTML = '<li class="state-empty"><p class="text-body font-medium">No reports in the last 24 hours.</p>' +
-        '<p class="text-small text-muted">Seen something on the trail? Report it.</p></li>';
+      ul.innerHTML = '<li class="state-empty"><p class="text-body font-medium">' + esc(t('reports.empty')) + '</p>' +
+        '<p class="text-small text-muted">' + esc(t('reports.empty.sub')) + '</p></li>';
       el.textContent = '';
       return;
     }
     ul.innerHTML = list.map(reportRowHtml).join('');
     if (failed && usingCache) {
-      el.textContent = 'Offline. Reports from ' + fmtClock(usingCache.at) + '.';
+      el.textContent = t('reports.offline', { time: fmtClock(usingCache.at) });
     } else {
-      el.textContent = 'Updated ' + fmtClock(usingCache ? usingCache.at : nowISO()) + '.';
+      el.textContent = t('reports.updated', { time: fmtClock(usingCache ? usingCache.at : nowISO()) });
     }
     Array.prototype.forEach.call(ul.querySelectorAll('[data-menu]'), function (btn) {
       btn.addEventListener('click', function () {
         reportMenu(btn, Number(btn.closest('li').getAttribute('data-id')));
+      });
+    });
+    Array.prototype.forEach.call(ul.querySelectorAll('[data-confirm]'), function (btn) {
+      btn.addEventListener('click', function () {
+        confirmReport(findReportById(Number(btn.getAttribute('data-confirm'))));
       });
     });
     Array.prototype.forEach.call(ul.querySelectorAll('[data-photo]'), function (btn) {
@@ -1467,15 +1849,16 @@
   }
 
   function renderReportsAndTrail() {
+    renderStatusBanner();
     renderStatus();
     renderReports();
     renderProfile();
     renderStops();
   }
-
   async function loadReports() {
     loading = true;
     failed = false;
+    renderHeader();
     renderReportsAndTrail();
     var res = null;
     try { res = await api('/api/reports'); } catch (e) {}
@@ -1495,6 +1878,7 @@
     loading = false;
     renderReportsAndTrail();
     renderHeader();
+    checkForNotifs();
     replayQueue();
   }
 
@@ -1507,24 +1891,30 @@
     var groups = P.buildPackingList({ days: packing.days, people: packing.people });
     var packedSet = {};
     (packing.packed || []).forEach(function (id) { packedSet[id] = true; });
+    var GROUP_KEY = {
+      'Shared by the group': 'group.shared',
+      'Each person': 'group.each',
+      'Food and water': 'group.food',
+    };
     var total = 0, done = 0;
     var html = '';
     groups.forEach(function (g) {
-      html += '<h2 class="section-label mt-5">' + esc(g.group) + '</h2><ul class="list">';
+      html += '<h2 class="section-label mt-5">' + esc(tx('pack.group.' + g.key, g.group)) + '</h2><ul class="list">';
       g.items.forEach(function (it) {
         total++;
         var isPacked = !!packedSet[it.id];
         if (isPacked) done++;
+        var itLabel = tx('pack.' + it.id + '.label', it.label);
         html += '<li class="list-row' + (isPacked ? ' bg-raised/40' : '') + '">' +
-          '<input type="checkbox" class="pack-box mt-0.5 h-5 w-5 flex-none accent-accent" data-pack="' + it.id + '"' + (isPacked ? ' checked' : '') + ' aria-label="' + esc(it.label) + '">' +
-          '<div class="min-w-0 flex-1"><p class="text-body' + (isPacked ? ' line-through decoration-line' : '') + '">' + esc(it.label) + '</p>' +
-          '<p class="text-small text-muted">' + esc(it.note) + '</p></div>' +
+          '<input type="checkbox" class="pack-box mt-0.5 h-5 w-5 flex-none accent-accent" data-pack="' + it.id + '"' + (isPacked ? ' checked' : '') + ' aria-label="' + esc(itLabel) + '">' +
+          '<div class="min-w-0 flex-1"><p class="text-body' + (isPacked ? ' line-through decoration-line' : '') + '">' + esc(itLabel) + '</p>' +
+          '<p class="text-small text-muted">' + esc(tx('pack.' + it.id + '.note', it.note)) + '</p></div>' +
           '<span class="flex-none text-small text-muted">× ' + it.qty + (it.unit ? ' ' + it.unit : '') + '</span></li>';
       });
       html += '</ul>';
     });
     $('packing-groups').innerHTML = html;
-    $('packed-count').textContent = done + ' of ' + total + ' packed';
+    $('packed-count').textContent = t('pack.count', { done: done, total: total });
     Array.prototype.forEach.call(document.querySelectorAll('.pack-box'), function (box) {
       box.addEventListener('change', function () {
         var id = box.getAttribute('data-pack');
@@ -1552,24 +1942,24 @@
       try {
         if (window.unNative && typeof unNative.alert === 'function') {
           unNative.alert({
-            title: 'Start over?',
-            message: 'This clears every packed tick. The list stays.',
+            title: t('reset.title'),
+            message: t('reset.msg'),
             buttons: [
-              { label: 'Cancel', style: 'cancel' },
-              { label: 'Start over', style: 'destructive', handler: function () { resetPacking(); } },
+              { label: t('cancel'), style: 'cancel' },
+              { label: t('pack.reset'), style: 'destructive', handler: function () { resetPacking(); } },
             ],
           });
           return;
         }
       } catch (e) {}
-      if (window.confirm('Start over? This clears every packed tick. The list stays.')) resetPacking();
+      if (window.confirm(t('reset.title') + ' ' + t('reset.msg'))) resetPacking();
     });
   }
   function resetPacking() {
     packing.packed = [];
     savePacking();
     renderPacking();
-    kitToast('List cleared');
+    kitToast(t('toast.cleared'));
   }
 
   // ── Location tab ───────────────────────────────────────────────────────
@@ -1580,20 +1970,20 @@
     var n = M.nearestStop(loc.lat, loc.lng);
     var d = Math.round(n.meters / 10) * 10;
     if (n.meters > 2000) {
-      return 'About ' + (n.meters / 1000).toFixed(1) + ' km from the route';
+      return t('loc.far', { km: fmtKm(n.meters / 1000) });
     }
-    return 'About ' + d + ' m from ' + n.stop.name + ', ' + fmtM(n.stop.elevM) + ' m';
+    return t('loc.near', { d: d, name: n.stop.name, elev: fmtM(n.stop.elevM) });
   }
   function renderLocation() {
     var loc = lsGet('location', null);
     var body = $('loc-body');
     if (loc) {
-      var acc = loc.accuracy ? ' (within ' + Math.round(loc.accuracy) + ' m)' : '';
+      var acc = loc.accuracy ? t('loc.within', { m: Math.round(loc.accuracy) }) : '';
       body.innerHTML = '<p class="font-semibold tabular-nums">' + loc.lat.toFixed(5) + ', ' + loc.lng.toFixed(5) + esc(acc) + '</p>' +
-        '<p class="mt-0.5 text-small text-muted">' + nearestLine(loc) + ' · taken at ' + fmtClock(loc.at) + '</p>' +
-        (autoLocOn ? '<p class="mt-0.5 text-small text-muted">Updates on its own about every 20 minutes while Mountain Trail is open.</p>' : '');
+        '<p class="mt-0.5 text-small text-muted">' + esc(nearestLine(loc)) + esc(t('loc.taken', { time: fmtClock(loc.at) })) + '</p>' +
+        (autoLocOn ? '<p class="mt-0.5 text-small text-muted">' + esc(t('loc.auto')) + '</p>' : '');
     } else {
-      body.innerHTML = '<p class="text-body text-muted">No location yet. Tap Update my location to take one.</p>';
+      body.innerHTML = '<p class="text-body text-muted">' + esc(t('loc.none')) + '</p>';
     }
     renderLocSync();
     $('coords-copy').hidden = !loc;
@@ -1610,17 +2000,16 @@
     var html = null;
     if (loc && loc.clientId) {
       if (locSending === loc.clientId) {
-        html = iconSvg('clock', 'h-4 w-4') + ' Sending your location…';
+        html = iconSvg('clock', 'h-4 w-4') + ' ' + esc(t('loc.sending'));
       } else if (loc.sentAt) {
-        html = '<span class="text-accent">' + iconSvg('check', 'h-4 w-4') + '</span> Sent to Mountain Trail at ' +
-          fmtClock(loc.sentAt) + '. Not shown to other hikers.';
+        html = '<span class="text-accent">' + iconSvg('check', 'h-4 w-4') + '</span> ' + esc(t('loc.sent', { time: fmtClock(loc.sentAt) }));
       } else if (loc.sendFailed) {
-        html = iconSvg('warning', 'h-4 w-4') + ' This location couldn\'t be sent. Tap Update my location to try again.';
+        html = iconSvg('warning', 'h-4 w-4') + ' ' + esc(t('loc.sendfail'));
       } else {
         var queued = false;
         queueAll().forEach(function (e) { if (e.kind === 'location' && e.clientId === loc.clientId) queued = true; });
         if (queued) {
-          html = iconSvg('clock', 'h-4 w-4') + ' Not sent yet. Kept on this phone, it sends when the signal is back.';
+          html = iconSvg('clock', 'h-4 w-4') + ' ' + esc(t('loc.queued'));
         }
       }
     }
@@ -1684,25 +2073,31 @@
   function fmtWhen(iso) {
     var d = new Date(iso);
     if (!isFinite(d.getTime())) return '';
-    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    var months = I18N.months(LANG);
     var h = d.getHours(), m = d.getMinutes();
-    return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m + ' on ' + d.getDate() + ' ' + months[d.getMonth()];
+    var time = (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+    var date = d.getDate() + ' ' + months[d.getMonth()];
+    return LANG === 'id' ? 'pukul ' + time + ', ' + date : time + ' on ' + date;
   }
   function buildMessage() {
     var loc = lsGet('location', null);
     var name = ($('name-field').value || '').trim();
     var contact = ($('contact-field').value || '').trim();
     var parts = [];
-    parts.push('This is ' + (name || 'a hiker') + ' on ' + MOUNTAIN.name + ' (Cibodas route).');
+    parts.push(t('msg.who', { name: name || t('msg.hiker') }));
     if (loc) {
-      parts.push('My last location, ' + fmtWhen(loc.at) + ': ' + loc.lat.toFixed(5) + ', ' + loc.lng.toFixed(5) +
-        (loc.accuracy ? ' (within ' + Math.round(loc.accuracy) + ' m)' : '') + ', ' + nearestLine(loc) + '.');
-      parts.push('Map: https://www.google.com/maps?q=' + loc.lat.toFixed(5) + ',' + loc.lng.toFixed(5));
+      parts.push(t('msg.loc', {
+        when: fmtWhen(loc.at),
+        coords: loc.lat.toFixed(5) + ', ' + loc.lng.toFixed(5),
+        acc: loc.accuracy ? t('loc.within', { m: Math.round(loc.accuracy) }) : '',
+        near: nearestLine(loc),
+      }));
+      parts.push(t('msg.map', { url: 'https://www.google.com/maps?q=' + loc.lat.toFixed(5) + ',' + loc.lng.toFixed(5) }));
     } else {
-      parts.push('Location not found yet.');
+      parts.push(t('msg.noloc'));
     }
-    if (contact) parts.push('Basecamp Cibodas contact: ' + contact + '.');
-    parts.push('Indonesia emergency number: 112.');
+    if (contact) parts.push(t('msg.contact', { contact: contact }));
+    parts.push(t('msg.emergency'));
     return parts.join(' ');
   }
   function contactValue() {
@@ -1754,7 +2149,7 @@
       li.appendChild(body);
       var title = document.createElement('p');
       title.className = 'text-body';
-      title.textContent = 'Message from ' + fmtWhen(entry.at);
+      title.textContent = t('share.from', { when: fmtWhen(entry.at) });
       body.appendChild(title);
       if (entry.coords) {
         var coords = document.createElement('p');
@@ -1768,13 +2163,13 @@
       wa.className = 'btn-secondary';
       wa.target = '_blank';
       wa.rel = 'noopener';
-      wa.setAttribute('aria-label', 'Send by WhatsApp');
+      wa.setAttribute('aria-label', t('share.wa'));
       wa.textContent = 'WhatsApp';
       wa.href = S.whatsappUrl(entry.text, contact);
       wa.addEventListener('click', function (e) {
         if (!navigator.onLine) {
           e.preventDefault();
-          kitToast('Still no signal. It stays in Waiting for signal.');
+          kitToast(t('toast.nosignal'));
           return;
         }
         setTimeout(function () { shareQueueRemove(entry.id); onChange(); }, 0);
@@ -1783,7 +2178,7 @@
       sms.className = 'btn-secondary';
       sms.target = '_blank';
       sms.rel = 'noopener';
-      sms.setAttribute('aria-label', 'Send by SMS');
+      sms.setAttribute('aria-label', t('share.sms'));
       sms.textContent = 'SMS';
       sms.href = S.smsUrl(entry.text, contact);
       sms.addEventListener('click', function () {
@@ -1792,7 +2187,7 @@
       var rm = document.createElement('button');
       rm.type = 'button';
       rm.className = 'btn-secondary';
-      rm.textContent = 'Remove';
+      rm.textContent = t('share.remove');
       rm.addEventListener('click', function () {
         shareQueueRemove(entry.id);
         onChange();
@@ -1812,7 +2207,7 @@
     wrap.className = 'flex flex-col gap-3 p-4';
     var h = document.createElement('h2');
     h.className = 'font-display text-heading';
-    h.textContent = 'Back online';
+    h.textContent = t('share.back');
     wrap.appendChild(h);
     var p = document.createElement('p');
     p.className = 'text-body text-muted';
@@ -1828,8 +2223,8 @@
     shareQueueRefreshing = function () {
       var q = shareQueueAll();
       p.textContent = q.length === 1
-        ? 'A location message you saved with no signal is ready to send.'
-        : q.length + ' location messages you saved with no signal are ready to send.';
+        ? tn('share.ready', 1)
+        : tn('share.ready', q.length);
       ul.textContent = '';
       shareQueueRows(function () {
         renderShareQueue();
@@ -1879,25 +2274,25 @@
         try {
           var r = await window.usernode.requestPermission('geolocation');
           if (r && r.state !== 'granted') {
-            status.textContent = 'Location permission is off for Mountain Trail. Turn it on in Homeroom’s settings for this app.';
+            status.textContent = t('loc.perm');
             return;
           }
           if (r && r.active === false) return; // granted; the frame reloads
         } catch (e) {}
       }
       if (!('geolocation' in navigator)) {
-        status.textContent = 'This device can\'t read a position.';
+        status.textContent = t('loc.nodevice');
         return;
       }
-      status.textContent = 'Finding your position…';
+      status.textContent = t('loc.finding');
       takeFix(function () {
         status.textContent = '';
         renderLocation();
         buildPicker();
         renderPickerHint();
-        kitToast('Location updated');
+        kitToast(t('toast.loc'));
       }, function () {
-        status.textContent = 'Couldn\'t find your position. Try again in the open.';
+        status.textContent = t('loc.findfail');
       });
     });
     async function autoLocationTick() {
@@ -1949,7 +2344,7 @@
     $('copy-btn').addEventListener('click', function () { copyMessage(buildMessage()); });
     $('coords-copy').addEventListener('click', function () {
       var loc = lsGet('location', null);
-      if (loc) copyMessage(S.coordsLine(loc.lat, loc.lng), 'Coordinates copied');
+      if (loc) copyMessage(S.coordsLine(loc.lat, loc.lng), t('toast.coords'));
     });
     // Offline, WhatsApp cannot open: keep the message on the phone instead.
     // Online, the anchor opens wa.me as normal.
@@ -1964,14 +2359,14 @@
           at: nowISO(),
         });
         renderShareQueue();
-        kitToast('No signal. Saved to send when you\'re back online.');
+        kitToast(t('toast.saved.offline'));
       }
     });
     autoLocationTick();
     setInterval(autoLocationTick, 60000);
   }
   async function copyMessage(text, doneMsg) {
-    var done = doneMsg || 'Message copied';
+    var done = doneMsg || t('toast.copied');
     try {
       await navigator.clipboard.writeText(text);
       kitToast(done);
@@ -1986,7 +2381,7 @@
       ta.remove();
       kitToast(done);
     } catch (e) {
-      kitToast('Couldn\'t copy. Select the message text yourself.');
+      kitToast(t('toast.copyfail'));
     }
   }
 
@@ -2005,7 +2400,29 @@
     });
     lsSet('name', 'Demo hiker');
     lsSet('contact', '0800 0000 000 (demo)');
+    // The demo shows the banner's warning look and a climb date in the
+    // window, so the weather warning is visible too. Seeded once; the
+    // plain route keeps the shipped "open" and no climb date.
+    lsSet('statusOverride', { level: 'limited', reason: 'weather' });
+    lsSet('follows', ['gede-pangrango']);
+    lsSet('climbDate', dayKeyOffset(1));
+    // Seeded notifications: one unread (the status change the override
+    // stands for) and one already read. The 'seen' snapshot carries
+    // reportsSig 'seed' so the first real check counts from this baseline
+    // instead of announcing every seeded report as new.
+    lsSet('notifs', [
+      { key: 'notif.statusChanged', params: { level: 'limited' }, at: new Date(nowDate().getTime() - 30 * 60000).toISOString(), read: false },
+      { key: 'notif.newReportsOne', params: {}, at: new Date(nowDate().getTime() - 3 * 3600000).toISOString(), read: true },
+    ]);
+    lsSet('seen', { statusSig: statusSig(), quotaSig: quotaSig(), weatherSig: weatherSig(), reportsSig: 'seed' });
     lsSet('seeded', true);
+  }
+  // 'YYYY-MM-DD' for now's UTC day plus n days; the climb-date input's
+  // format and status.js's day keys.
+  function dayKeyOffset(n) {
+    var d = nowDate();
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
   }
 
   // ── Offline / service worker ───────────────────────────────────────────
@@ -2021,11 +2438,15 @@
 
   // ── Boot ───────────────────────────────────────────────────────────────
   async function boot() {
+    applyStaticText();
+    renderLangButtons();
+    wireLang();
     picker = $('stop-picker');
     // The guide is part of the app, so it renders from trail-data at once,
     // before anything waits on the network: header, profile and all nine
     // stops now, skeleton bars only where the reports will land.
     renderReportsAndTrail();
+    renderHeader(); // the header too, so it never shifts while reports load
     try {
       var me = await api('/api/me');
       if (me && me.ok && me.data) {
@@ -2043,28 +2464,31 @@
     wireLocation();
     if (demo) seedDemoShare(); // after wireLocation fills the name and contact fields
     wirePhotoInput();
+    wireNotifs();
     renderPacking();
+    renderPermits();
+    renderWeather();
     renderLocation();
     renderShareQueue();
     if (navigator.onLine && shareQueueAll().length) {
-      kitToast('A saved location message is waiting to send. See Location.');
+      kitToast(t('toast.queued'));
     }
     renderReportsAndTrail();
     renderPickerHint();
     wireCatalogSearch();
     renderMountainsRoute(); // the shipped catalog, before anything waits on the network
-    TABS.forEach(function (t) {
-      $('tabbtn-' + t).addEventListener('click', function () {
+    TABS.forEach(function (name) {
+      $('tabbtn-' + name).addEventListener('click', function () {
         // Tapping the Mountains tab itself returns to the list, not the page
         // the tab was last left on; the back link does that on purpose.
-        if (t === 'mountains' && currentMountain) {
+        if (name === 'mountains' && currentMountain) {
           try { history.replaceState(null, '', '#mountains'); } catch (e) {}
         }
-        switchTab(t);
+        switchTab(name);
       });
     });
-    var t = tabFromHash() || lsGet('tab', null) || 'mountains';
-    switchTab(t);
+    var startTab = tabFromHash() || lsGet('tab', null) || 'mountains';
+    switchTab(startTab);
     Array.prototype.forEach.call(document.querySelectorAll('.condition-button'), function (btn) {
       btn.addEventListener('click', function () { sendReport(btn.getAttribute('data-cond')); });
     });
@@ -2097,14 +2521,40 @@
     loadReports();
   }
 
+  // The Notifications controls.
+  function wireNotifs() {
+    var follow = $('follow-toggle');
+    if (follow) follow.addEventListener('change', function () {
+      var follows = lsGet('follows', []);
+      var at = follows.indexOf(MOUNTAIN.id);
+      if (follow.checked) {
+        if (at < 0) follows.push(MOUNTAIN.id);
+      } else if (at >= 0) {
+        follows.splice(at, 1);
+      }
+      lsSet('follows', follows);
+      checkForNotifs();
+      renderNotifs();
+    });
+    var read = $('notif-read');
+    if (read) read.addEventListener('click', function () {
+      lsSet('notifs', lsGet('notifs', []).map(function (n) {
+        return Object.assign({}, n, { read: true });
+      }));
+      renderNotifs();
+    });
+  }
   // A toast fallback and a plain-overlay fallback live here so a missing
-  // native kit still reads as the app.
+  // native kit still reads as the app. The fallback toast clears the tab
+  // bar (68 px + the safe-area inset) by 12 px, as the kit's own toast does.
   var style = document.createElement('style');
   style.textContent =
-    '.toast-fallback{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:60;background:rgb(var(--fg));color:rgb(var(--ground));padding:10px 16px;border-radius:9999px;font-size:14px;line-height:20px;max-width:90vw}' +
+    '.toast-fallback{position:fixed;left:50%;bottom:calc(80px + var(--un-safe-inset-bottom, env(safe-area-inset-bottom, 0px)));transform:translateX(-50%);z-index:60;background:rgb(var(--fg));color:rgb(var(--ground));padding:10px 16px;border-radius:9999px;font-size:14px;line-height:20px;max-width:90vw}' +
     '.overlay-fallback{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-end;justify-content:center;background:rgb(var(--fg)/0.4);padding:16px}' +
     '.overlay-card{width:100%;max-width:26rem;background:rgb(var(--surface));border-radius:1rem;padding:8px;max-height:80vh;overflow:auto}';
   document.head.appendChild(style);
 
-  boot();
+  boot().catch(function (e) {
+    console.error('Mountain Trail: boot failed', e && (e.stack || e.message || e));
+  });
 })();

@@ -158,7 +158,7 @@ const trailData = require('./public/trail-data.js');
 const catalog = require('./public/mountain-catalog.js');
 const { parseLocation } = require('./lib/location.js');
 const { parseCatalogEdit } = require('./lib/catalog-edit.js');
-const STOP_IDS = new Set(trailData.STOPS.map((s) => s.id));
+const STOP_IDS = new Set(trailData.ALL_STOPS.map((s) => s.id));
 const CONDITION_IDS = new Set(trailData.CONDITIONS.map((c) => c.id));
 
 // This app's admins are the names in dapp.json's `admins` array, read once
@@ -179,12 +179,17 @@ async function migrate() {
     user_id TEXT NOT NULL,
     username TEXT NOT NULL,
     stop_id TEXT NOT NULL,
-    condition TEXT NOT NULL CHECK (condition IN ('slippery','landslide','no-water','heavy-fog')),
+    condition TEXT NOT NULL CHECK (condition IN ('slippery','landslide','no-water','heavy-fog','wildlife','extreme-weather','fallen-tree')),
     note TEXT CHECK (char_length(note) <= 200),
     photo_url TEXT,
     photo_id TEXT,
     created_at TIMESTAMPTZ NOT NULL
   )`);
+  // Older databases carry the four-condition CHECK; replace it so the
+  // three new conditions insert. Idempotent, like every migration here.
+  await pool.query('ALTER TABLE trail_reports DROP CONSTRAINT IF EXISTS trail_reports_condition_check');
+  await pool.query(`ALTER TABLE trail_reports ADD CONSTRAINT trail_reports_condition_check
+    CHECK (condition IN ('slippery','landslide','no-water','heavy-fog','wildlife','extreme-weather','fallen-tree'))`);
   await pool.query(
     'CREATE INDEX IF NOT EXISTS trail_reports_created_at_idx ON trail_reports (created_at DESC)'
   );

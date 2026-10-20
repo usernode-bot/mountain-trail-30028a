@@ -25,6 +25,12 @@
       "expectSelector": "#trail-line"
     },
     {
+      "name": "Trail tab shows the route difficulty",
+      "path": "/",
+      "expectText": "Difficulty: Hard",
+      "expectSelector": "#mtn-difficulty .diff-meter"
+    },
+    {
       "name": "Profile stop labels",
       "path": "/",
       "expectText": "km 0, start"
@@ -82,6 +88,34 @@
       "name": "Catalog filters render",
       "path": "/#mountains",
       "expectText": "Difficulty"
+    },
+    {
+      "name": "Trail tab demo shows the status banner, permits and weather",
+      "path": "/?demo=1",
+      "expectText": "Open with limits",
+      "expectSelector": "#permits-card"
+    },
+    {
+      "name": "Trail tab demo shows the weather card",
+      "path": "/?demo=1",
+      "expectText": "Basecamp and summit weather",
+      "expectSelector": "#weather-card"
+    },
+    {
+      "name": "Trail tab demo shows the notifications section",
+      "path": "/?demo=1",
+      "expectText": "Notifications",
+      "expectSelector": "#notif-list"
+    },
+    {
+      "name": "Report tab demo shows the new condition buttons",
+      "path": "/?demo=1#report",
+      "expectText": "Fallen tree"
+    },
+    {
+      "name": "Report tab demo offers the still-valid confirmation",
+      "path": "/?demo=1#report",
+      "expectText": "Still valid"
     }
   ]
 }

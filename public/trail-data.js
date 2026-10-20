@@ -3,6 +3,8 @@
  * no signal; server.js requires this same file to validate reports.
  * Heights, distances, walking times and coordinates are approximate guide
  * figures for the Cibodas route, not a survey.
+ * Laid out as destination > route > stop (request #30). MOUNTAIN and STOPS
+ * are kept as views of the default route so the screens read one shape.
  */
 (function (root, factory) {
   var api = factory();
@@ -11,26 +13,104 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  var MOUNTAIN = {
+  /*
+   * The guide is three levels deep: a destination (a mountain, hill or
+   * valley, which is where the category gunung / bukit / lembah belongs),
+   * its routes (the ways in from a basecamp), and each route's stops.
+   * Gede Pangrango by Cibodas is the one destination so far; DESTINATIONS
+   * is filled at the bottom of this file once its stops are declared.
+   * Stop ids are unique across every route: reports store a bare stop_id.
+   */
+  var GEDE_PANGRANGO = {
+    id: 'gede-pangrango',
     name: 'Gede Pangrango',
+    category: 'gunung', // 'gunung' | 'bukit' | 'lembah', see LANDSCAPES
+    province: 'Jawa Barat',
+    // Approximate guide figures, not verified against the park.
+    peaks: [
+      { name: 'Puncak Gede', elevM: 2958 },
+      { name: 'Puncak Pangrango', elevM: 3019 },
+    ],
+    /*
+     * Curated mountain state, updated with app releases (the platform
+     * offers no live source and no editor role). Every block carries
+     * updatedAt / checkedAt / verified so the UI can say how fresh each
+     * fact is and show "not verified" until a person confirms the figures
+     * against the park's official pages.
+     */
+    status: {
+      level: 'open', // 'open' | 'limited' | 'closed'
+      reason: null, // 'weather' | 'fire' | 'eruption' | 'maintenance' | null
+      updatedAt: '2026-10-15T00:00:00Z',
+      checkedAt: '2026-10-15T00:00:00Z',
+      verified: false,
+    },
+    permits: {
+      booking: 'online', // 'online' | 'onsite' | 'none'
+      bookingUrl: 'https://simaksi.gnpgede.com/',
+      quotaDaily: 1500,
+      feeWeekdayIdr: 25000,
+      feeWeekendIdr: 45000,
+      requirements: ['health-letter', 'id'],
+      minGroupSize: 3,
+      checkedAt: '2026-10-15T00:00:00Z',
+      verified: false,
+    },
+    routes: [], // filled below
+  };
+
+  var CIBODAS = {
+    id: 'cibodas',
+    destinationId: 'gede-pangrango',
+    name: 'Cibodas',
     route: 'Cibodas route to Puncak Gede',
     summitM: 2958,
     lengthKm: 9.6,
     climbM: 1683,
     hoursUp: '5 to 7',
+    hoursUpMin: 5,
+    hoursUpMax: 7,
+    difficulty: 'hard', // 'easy' | 'moderate' | 'hard', see DIFFICULTIES; approximate guide figure
+    // A route may carry its own status or permits; when it does, they
+    // replace the destination's. Cibodas uses the destination's.
+    status: null,
+    permits: null,
+    // Curated 3-day summit forecast, one entry per forecast day. Day
+    // meaning (today / tomorrow / the day after) is decided by the client
+    // from index, so the data never reads as stale on an old date.
+    weather: {
+      updatedAt: '2026-10-15T00:00:00Z',
+      checkedAt: '2026-10-15T00:00:00Z',
+      verified: false,
+      basecamp: { tempC: 18, windKmh: 8, rainPct: 40 },
+      summit: { tempC: 7, windKmh: 25, rainPct: 55 },
+      days: [
+        { date: null, tempHighC: 9, tempLowC: 4, windKmh: 30, rainPct: 60 },
+        { date: null, tempHighC: 9, tempLowC: 4, windKmh: 45, rainPct: 80 },
+        { date: null, tempHighC: 10, tempLowC: 5, windKmh: 20, rainPct: 45 },
+      ],
+    },
+    stops: [], // filled below
   };
 
   // tone: 'warn' (amber) for conditions that slow you down, 'danger' (red)
   // for a blocked path. severity decides which warning the status strip
-  // shows first: landslide 4, heavy fog 3, no water 2, slippery 1.
+  // shows first, and every severity is unique: landslide 7, fallen tree 6,
+  // extreme weather 5, heavy fog 4, wildlife 3, no water 2, slippery 1.
   var CONDITIONS = [
     { id: 'slippery', label: 'Slippery', hint: 'Wet rock or mud', tone: 'warn', severity: 1 },
     { id: 'no-water', label: 'No water', hint: 'Source dry or barely flowing', tone: 'warn', severity: 2 },
-    { id: 'heavy-fog', label: 'Heavy fog', hint: "Can't see the next marker", tone: 'warn', severity: 3 },
-    { id: 'landslide', label: 'Landslide', hint: 'Path buried or broken', tone: 'danger', severity: 4 },
+    { id: 'wildlife', label: 'Wildlife', hint: 'Unusual animals near the path', tone: 'warn', severity: 3 },
+    { id: 'heavy-fog', label: 'Heavy fog', hint: "Can't see the next marker", tone: 'warn', severity: 4 },
+    { id: 'extreme-weather', label: 'Extreme weather', hint: 'Heavy rain or strong wind', tone: 'warn', severity: 5 },
+    { id: 'fallen-tree', label: 'Fallen tree', hint: 'Trunk blocking the path', tone: 'danger', severity: 6 },
+    { id: 'landslide', label: 'Landslide', hint: 'Path buried or broken', tone: 'danger', severity: 7 },
   ];
 
-  var STOPS = [
+  // The Cibodas route's stops, basecamp to summit. kinds is the stop's
+  // type: basecamp, post, water, camp, junction (a side path leaves here),
+  // summit. A stop may be several.
+  var CIBODAS_STOPS = [
     {
       id: 'cibodas', name: 'Basecamp Cibodas', kinds: ['basecamp', 'water'],
       elevM: 1275, km: 0, lat: -6.7405, lng: 107.0003,
@@ -53,7 +133,7 @@
       legToNext: { min: 20, climbM: 8 },
     },
     {
-      id: 'panyancangan', name: 'Panyancangan', kinds: ['post'],
+      id: 'panyancangan', name: 'Panyancangan', kinds: ['post', 'junction'],
       elevM: 1628, km: 2.6, lat: -6.7530, lng: 106.9950,
       short: 'Shelter, side path to Cibeureum falls',
       detail: 'A rest shelter at the foot of the long climb. A side path drops to the Cibeureum waterfalls. From here the trail steepens for roughly an hour and a half.',
@@ -74,7 +154,7 @@
       legToNext: { min: 40, climbM: 175 },
     },
     {
-      id: 'kandang-badak', name: 'Kandang Badak', kinds: ['camp', 'water'],
+      id: 'kandang-badak', name: 'Kandang Badak', kinds: ['camp', 'water', 'junction'],
       elevM: 2395, km: 7.0, lat: -6.7720, lng: 106.9835,
       short: 'Main camp, path to Pangrango',
       detail: 'The main camp area, with a spring and room for tents. The side path to Mount Pangrango leaves from here. Nights drop close to 5 °C.',
@@ -96,18 +176,88 @@
     },
   ];
 
+  // Destination categories, in display order. Ids are stable and never
+  // translated (like condition ids); labels live in i18n.js under ls.<id>.
+  // A category belongs to a destination, never to a stop (request #30).
+  var LANDSCAPES = ['gunung', 'bukit', 'lembah'];
+  // The stop types the Trail tab filters by, in chip order. Basecamp and
+  // summit show under All only.
+  var STOP_TYPES = ['post', 'water', 'camp', 'junction'];
+  // Route difficulty, easiest first. A route's optional difficulty is one of
+  // these ids; labels live in i18n.js under diff.<id>.
+  var DIFFICULTIES = ['easy', 'moderate', 'hard'];
+
+  CIBODAS.stops = CIBODAS_STOPS;
+  GEDE_PANGRANGO.routes = [CIBODAS];
+  var DESTINATIONS = [GEDE_PANGRANGO];
+
+  var DEST_BY_ID = {};
+  var ROUTE_BY_ID = {};
+  var ALL_STOPS = [];
+  var STOP_ROUTE = {};
+  DESTINATIONS.forEach(function (d) {
+    DEST_BY_ID[d.id] = d;
+    d.routes.forEach(function (r) {
+      ROUTE_BY_ID[r.id] = r;
+      r.stops.forEach(function (s) {
+        ALL_STOPS.push(s);
+        STOP_ROUTE[s.id] = r.id;
+      });
+    });
+  });
+
   var COND_BY_ID = {};
   CONDITIONS.forEach(function (c) { COND_BY_ID[c.id] = c; });
   var STOP_BY_ID = {};
-  STOPS.forEach(function (s) { STOP_BY_ID[s.id] = s; });
+  ALL_STOPS.forEach(function (s) { STOP_BY_ID[s.id] = s; });
 
-  // Cumulative walking minutes from basecamp: each stop's time is the sum
-  // of legToNext.min for every leg before it, with no rest breaks. Basecamp
-  // itself is 0. Used by the labelled height profile.
-  var MIN_FROM_BASECAMP = { cibodas: 0 };
-  for (var mb = 1; mb < STOPS.length; mb++) {
-    MIN_FROM_BASECAMP[STOPS[mb].id] = MIN_FROM_BASECAMP[STOPS[mb - 1].id] + STOPS[mb - 1].legToNext.min;
+  // The route a stop is on, or null for an unknown id.
+  function routeOfStop(stopId) {
+    return STOP_ROUTE[stopId] ? ROUTE_BY_ID[STOP_ROUTE[stopId]] : null;
   }
+
+  // One route seen as the flat "mountain" the screens read: the
+  // destination's name, category and province with the route's figures,
+  // and the route's own status or permits where it has them.
+  function mountainView(route) {
+    var d = DEST_BY_ID[route.destinationId];
+    return {
+      id: d.id,
+      name: d.name,
+      category: d.category,
+      province: d.province,
+      routeId: route.id,
+      route: route.route,
+      summitM: route.summitM,
+      lengthKm: route.lengthKm,
+      climbM: route.climbM,
+      hoursUp: route.hoursUp,
+      hoursUpMin: route.hoursUpMin,
+      hoursUpMax: route.hoursUpMax,
+      difficulty: route.difficulty || null,
+      status: route.status || d.status,
+      permits: route.permits || d.permits,
+      weather: route.weather,
+    };
+  }
+
+  // The route the app shows, until there is more than one to pick from.
+  var DEFAULT_ROUTE = CIBODAS;
+  var MOUNTAIN = mountainView(DEFAULT_ROUTE);
+  var STOPS = DEFAULT_ROUTE.stops;
+
+  // Cumulative walking minutes from each route's basecamp: each stop's time
+  // is the sum of legToNext.min for every leg before it, with no rest
+  // breaks. Basecamps are 0. Keyed by stop id (unique across routes). Used
+  // by the labelled height profile.
+  var MIN_FROM_BASECAMP = {};
+  DESTINATIONS.forEach(function (d) {
+    d.routes.forEach(function (r) {
+      r.stops.forEach(function (s, i) {
+        MIN_FROM_BASECAMP[s.id] = i === 0 ? 0 : MIN_FROM_BASECAMP[r.stops[i - 1].id] + r.stops[i - 1].legToNext.min;
+      });
+    });
+  });
 
   function haversineM(lat1, lng1, lat2, lng2) {
     var R = 6371000;
@@ -119,9 +269,11 @@
   }
 
   // Distance in metres from a position to each stop; returns the closest.
-  function nearestStop(lat, lng) {
+  // Searches one route's stops when a route id is given, every stop if not.
+  function nearestStop(lat, lng, routeId) {
     var best = null, bestD = Infinity;
-    STOPS.forEach(function (s) {
+    var list = routeId && ROUTE_BY_ID[routeId] ? ROUTE_BY_ID[routeId].stops : ALL_STOPS;
+    list.forEach(function (s) {
       var d = haversineM(lat, lng, s.lat, s.lng);
       if (d < bestD) { bestD = d; best = s; }
     });
@@ -146,12 +298,21 @@
   }
 
   return {
+    DESTINATIONS: DESTINATIONS,
+    DEST_BY_ID: DEST_BY_ID,
+    ROUTE_BY_ID: ROUTE_BY_ID,
+    ALL_STOPS: ALL_STOPS,
+    routeOfStop: routeOfStop,
+    mountainView: mountainView,
     MOUNTAIN: MOUNTAIN,
     CONDITIONS: CONDITIONS,
     COND_BY_ID: COND_BY_ID,
     STOPS: STOPS,
     STOP_BY_ID: STOP_BY_ID,
     MIN_FROM_BASECAMP: MIN_FROM_BASECAMP,
+    LANDSCAPES: LANDSCAPES,
+    STOP_TYPES: STOP_TYPES,
+    DIFFICULTIES: DIFFICULTIES,
     nearestStop: nearestStop,
     formatAgo: formatAgo,
     formatConfirms: formatConfirms,

@@ -36,6 +36,12 @@
     --warn: 156 90 0;         /* trail warning: slippery, no water, fog */
     --on-warn: 255 255 255;
     --water: 22 98 160;       /* map blue for water sources */
+
+    /* How much bottom chrome the app's own tab bar takes up (4 px + the
+       52 px tabs + 12 px, plus the home-indicator inset the platform
+       forwards). The native kit's toast reads this and rests 16 px above
+       it, so feedback never sits on the tab bar. Same in the dark look. */
+    --un-toast-inset-bottom: calc(68px + var(--un-safe-inset-bottom, env(safe-area-inset-bottom, 0px)));
   }
   .dark {
     --ground: 16 20 17;
@@ -80,6 +86,20 @@
   }
   .btn-secondary {
     @apply border border-line bg-surface text-fg hover:bg-raised;
+  }
+  /* A quiet text button (Undo, Mark read): accent-coloured words, a full
+     44 px row so the tap target is right. */
+  .btn-text {
+    @apply inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg px-3 text-body font-medium text-accent
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus;
+  }
+
+  /* The chosen language button: forest green border, soft green tint,
+     semibold, from the tokens so it reads in both looks. */
+  .btn-secondary[aria-pressed="true"] {
+    border: 2px solid rgb(var(--accent));
+    background: rgb(var(--accent) / 0.08);
+    font-weight: 600;
   }
 
   /* Text inputs, selects and textareas: <input class="field">, 44 px tall.
@@ -166,6 +186,85 @@
   }
   .status-strip-photo img { @apply absolute inset-0 h-full w-full object-cover; }
 
+  /* The mountain status banner, above the report strip: the official
+     Buka / Dibuka Terbatas / Ditutup level and its reason. Tones reuse the
+     strip's tint pattern: green for open, amber for limited, red for
+     closed, plain border while loading. */
+  .status-banner {
+    @apply flex min-h-11 items-start gap-3 rounded-xl border border-line bg-surface p-3;
+  }
+  .status-banner-icon {
+    @apply mt-0.5 h-6 w-6 flex-none;
+    color: rgb(var(--accent));
+  }
+  .status-banner-accent {
+    border-color: rgb(var(--accent) / 0.35);
+    background: rgb(var(--accent) / 0.07);
+  }
+  .status-banner-accent .status-banner-icon { color: rgb(var(--accent)); }
+  .status-banner-warn {
+    border-color: rgb(var(--warn) / 0.35);
+    background: rgb(var(--warn) / 0.07);
+  }
+  .status-banner-warn .status-banner-icon { color: rgb(var(--warn)); }
+  .status-banner-danger {
+    border-color: rgb(var(--danger) / 0.35);
+    background: rgb(var(--danger) / 0.07);
+  }
+  .status-banner-danger .status-banner-icon { color: rgb(var(--danger)); }
+  .status-banner-skeleton {
+    @apply pointer-events-none;
+  }
+
+  /* A small pill, e.g. "not verified" and the unread count. */
+  .badge {
+    @apply inline-flex min-h-6 items-center rounded-full px-2 text-small;
+    background: rgb(var(--raised));
+    color: rgb(var(--muted));
+  }
+
+  /* The two-per-row grid the weather card uses for basecamp and summit. */
+  .wx-grid {
+    @apply grid grid-cols-2 gap-3;
+  }
+  .wx-cell {
+    @apply rounded-lg border border-line p-3;
+  }
+  .wx-days {
+    @apply mt-3 grid grid-cols-3 gap-3;
+  }
+  .wx-day {
+    @apply rounded-lg border border-line p-2.5 text-center text-small;
+  }
+  .wx-day-warn {
+    border-color: rgb(var(--warn) / 0.5);
+    background: rgb(var(--warn) / 0.07);
+  }
+  .wx-day-name {
+    @apply text-small font-medium text-fg;
+  }
+  .wx-alert {
+    @apply mt-3 flex items-start gap-2 rounded-lg border p-2.5 text-small;
+    border-color: rgb(var(--warn) / 0.5);
+    background: rgb(var(--warn) / 0.07);
+    color: rgb(var(--fg));
+  }
+  .wx-alert-icon {
+    @apply mt-0.5 h-5 w-5 flex-none;
+    color: rgb(var(--warn));
+  }
+
+  /* A label-and-value row inside the permits card. */
+  .kv-row {
+    @apply flex min-h-11 items-baseline justify-between gap-4 py-2.5;
+  }
+  .kv-label {
+    @apply flex-none text-small text-muted;
+  }
+  .kv-value {
+    @apply text-right text-body text-fg;
+  }
+
   /* The trail line, the app's signature: a dashed rail the way trails are
      drawn on a map, with a round node per stop carrying its kind's icon,
      and the node's ring in the colour of the stop's latest condition. */
@@ -193,6 +292,40 @@
   .fac { @apply mt-1 flex gap-3 text-small; }
   .fac > span { @apply inline-flex items-center gap-1; }
   .fac-water { color: rgb(var(--water)); }
+  /* The mountain's category (Mountain, Hill, Valley) under its name, like
+     a stop's water and camp line but in muted grey. */
+  .ls-line { @apply mt-1 flex gap-3 text-small text-muted; }
+  .ls-line > span { @apply inline-flex items-center gap-1; }
+  /* Three rising steps beside the difficulty words: one filled for Easy,
+     two for Moderate, three for Hard. Neutral by design: amber and red
+     already mean a trail warning and a blocked path. */
+  .diff-meter { @apply inline-flex h-3 items-end gap-0.5; }
+  .diff-meter i { @apply block w-1 rounded-sm bg-line; }
+  .diff-meter i:nth-child(1) { @apply h-1; }
+  .diff-meter i:nth-child(2) { @apply h-2; }
+  .diff-meter i:nth-child(3) { @apply h-3; }
+  .diff-meter i.on { @apply bg-fg; }
+  /* One stop or none left by the stop-type filter: no rail to draw. */
+  .trail-line-bare::before { display: none; }
+
+  /* The stop-type filter chips above the trail line, shaped like the stop
+     chips under the profile; the picked one in the action green. */
+  .chip-row {
+    @apply mb-3 flex gap-1.5 overflow-x-auto pb-1;
+  }
+  .chip {
+    @apply inline-flex min-h-11 flex-none items-center gap-1 whitespace-nowrap rounded-full border border-line bg-surface px-2.5 text-small font-medium text-fg
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus;
+  }
+  .chip-on {
+    border-width: 2px;
+    border-color: rgb(var(--accent));
+    background: rgb(var(--accent) / 0.08);
+    color: rgb(var(--accent));
+    padding-left: 9px;
+    padding-right: 9px;
+  }
+  .chip-count { @apply font-normal text-muted; }
   /* The walk to the next stop sits on the dashed rail between the nodes:
      its padding plus the stop rows' 6 px keeps it about 12 px clear of
      both, and the 56 px indent puts it past the node with the stop text. */
@@ -259,7 +392,7 @@
     padding: 5px 11px;
   }
 
-  /* The Report tab's four large buttons. One tap sends; no form first. */
+  /* The Report tab's seven large buttons. One tap sends; no form first. */
   .condition-button {
     @apply flex flex-col items-start gap-1 rounded-xl border border-line bg-surface p-3.5 text-left
       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus;
