@@ -326,6 +326,7 @@
     renderReportsAndTrail();
     renderPermits();
     renderWeather();
+    renderOfflinePack();
     renderNotifs();
     if (picker) { buildPicker(); renderPickerHint(); }
     if (packing) renderPacking();
@@ -2033,13 +2034,180 @@
     return d.toISOString().slice(0, 10);
   }
 
+  // ── Offline save (the Offline section on the Trail tab) ────────────────
+  // The guide already opens without signal; this saves today's reports and
+  // their photos too. The record and the photos stay on this phone.
+  var PHOTO_CACHE = 'mt-photos'; // the cache name public/sw.js serves from
+  var packState = 'idle';        // 'idle' | 'saving' | 'saved' | 'failed'
+  var packError = null;          // 'worker' | 'files' | 'reports' | 'storage'
+  var packRecord = null;         // { savedAt, reports, photos, photosMissed }
+  var swFailed = false;
+
+  function withTimeout(promise, ms) {
+    return new Promise(function (resolve, reject) {
+      var timer = setTimeout(function () { reject(new Error('timeout')); }, ms);
+      Promise.resolve(promise).then(function (v) {
+        clearTimeout(timer);
+        resolve(v);
+      }, function (e) {
+        clearTimeout(timer);
+        reject(e);
+      });
+    });
+  }
+
+  function renderOfflinePack() {
+    var el = $('offline-text');
+    var btn = $('offline-save');
+    if (!el || !btn) return;
+    if (packState === 'saving') {
+      el.innerHTML = '<p class="text-body">' + esc(t('offline.saving')) + '</p>';
+      btn.disabled = true;
+      btn.textContent = t('offline.save');
+      return;
+    }
+    btn.disabled = false;
+    if (packState === 'failed') {
+      el.innerHTML = '<p class="text-body font-medium">' + esc(t('offline.err.' + packError)) + '</p>' +
+        '<p class="mt-1 text-small text-muted">' + esc(t('offline.err.still')) + '</p>' +
+        (packRecord ? '<p class="mt-1 text-small text-muted">' + esc(t('offline.err.earlier', { time: fmtClock(packRecord.savedAt) })) + '</p>' : '');
+      btn.textContent = t('retry');
+      return;
+    }
+    btn.textContent = t('offline.save');
+    if (packState === 'saved' && packRecord) {
+      el.innerHTML = '<p class="flex items-center gap-1.5 text-body">' +
+        '<span class="text-accent">' + iconSvg('check', 'h-4 w-4') + '</span>' +
+        '<span>' + esc(t('offline.saved', {
+          time: fmtClock(packRecord.savedAt),
+          reports: tn('offline.reports', packRecord.reports),
+          photos: tn('offline.photos', packRecord.photos),
+        })) + '</span></p>' +
+        '<p class="mt-1 text-small text-muted">' + esc(t('offline.savedNote')) + '</p>' +
+        (packRecord.photosMissed > 0 ? '<p class="mt-1 text-small text-muted">' + esc(tn('offline.photosMissed', packRecord.photosMissed)) + '</p>' : '');
+      return;
+    }
+    el.innerHTML = '<p class="text-body text-muted">' + esc(t('offline.intro')) + '</p>';
+  }
+
+  function restoreOfflinePack() {
+    packRecord = lsGet('offlinePack', null);
+    if (packRecord) packState = 'saved';
+    renderOfflinePack();
+  }
+
+  // One photo into the photo cache; a failure counts as missed, never fails
+  // the save.
+  async function cachePhoto(cache, url) {
+    if (!cache) return false;
+    try {
+      var res = null;
+      try {
+        res = await withTimeout(fetch(url, { mode: 'cors' }), 15000);
+      } catch (e) {
+        res = await withTimeout(fetch(url, { mode: 'no-cors' }), 15000);
+      }
+      if (!res || (!res.ok && res.type !== 'opaque')) return false;
+      await cache.put(url, res);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // The explicit save: worker and shell files, then today's reports through
+  // loadReports, then their photos. Only a read-back record counts as saved.
+  async function saveOffline() {
+    if (packState === 'saving') return;
+    packState = 'saving';
+    packError = null;
+    renderOfflinePack();
+    var start = nowISO();
+    function fail(reason) {
+      packError = reason;
+      packState = 'failed';
+      renderOfflinePack();
+    }
+
+    // 1. The worker, and the storage it needs.
+    if (swFailed || !('caches' in window) || !navigator.serviceWorker) return fail('worker');
+    try {
+      await withTimeout(navigator.serviceWorker.ready, 20000);
+    } catch (e) {
+      return fail('worker');
+    }
+
+    // 2. Every shell file really is in the cache.
+    try {
+      var hits = await Promise.all(ST.SHELL_FILES.map(function (p) { return caches.match(p); }));
+      if (hits.some(function (h) { return !h; })) return fail('files');
+    } catch (e) {
+      return fail('worker');
+    }
+
+    // 3. Today's reports: the one page-side fetch, and what fills the cache.
+    await loadReports();
+    if (failed) return fail('reports');
+    var rec = lsGet('reportsCache', null);
+    if (!rec || !rec.at || rec.at < start) return fail('storage');
+
+    // 4. Their photos. A photo that cannot be stored does not fail the save.
+    var list = visibleReports().filter(function (r) { return !r.pending; });
+    var urls = ST.packPhotoUrls(list);
+    var dataPhotos = list.filter(function (r) {
+      return typeof r.photoUrl === 'string' && /^data:/i.test(r.photoUrl);
+    }).length;
+    var photoCache = null;
+    try { photoCache = await caches.open(PHOTO_CACHE); } catch (e) { photoCache = null; }
+    var savedPhotos = 0;
+    var missedPhotos = 0;
+    var next = 0;
+    async function photoWorker() {
+      while (next < urls.length) {
+        var url = urls[next++];
+        if (await cachePhoto(photoCache, url)) savedPhotos++; else missedPhotos++;
+      }
+    }
+    await Promise.all([photoWorker(), photoWorker(), photoWorker()]);
+    // Each save replaces the previous save's photos, so they never pile up.
+    try {
+      var keys = photoCache ? await photoCache.keys() : [];
+      await Promise.all(keys.map(function (req) {
+        return urls.indexOf(req.url) < 0 ? photoCache.delete(req) : null;
+      }));
+    } catch (e) {}
+
+    // 5. The record, read back: the only proof the phone stored it.
+    var savedAt = nowISO();
+    lsSet('offlinePack', {
+      savedAt: savedAt,
+      reports: list.length,
+      photos: dataPhotos + savedPhotos,
+      photosMissed: missedPhotos,
+    });
+    var check = lsGet('offlinePack', null);
+    if (!check || check.savedAt !== savedAt) return fail('storage');
+    packRecord = check;
+    packState = 'saved';
+    renderOfflinePack();
+  }
+
+  function wireOfflinePack() {
+    var btn = $('offline-save');
+    if (btn) btn.addEventListener('click', function () { saveOffline(); });
+  }
+
   // ── Offline / service worker ───────────────────────────────────────────
   function registerSw() {
-    if (!('serviceWorker' in navigator)) return;
+    if (!('serviceWorker' in navigator)) {
+      swFailed = true;
+      return;
+    }
     navigator.serviceWorker.register('/sw.js').then(function () {
       swReady = true;
       renderHeader();
     }).catch(function (e) {
+      swFailed = true;
       console.info('Mountain Trail: offline cache not registered (' + ((e && e.message) || e) + ')');
     });
   }
@@ -2073,9 +2241,11 @@
     if (demo) seedDemoShare(); // after wireLocation fills the name and contact fields
     wirePhotoInput();
     wireNotifs();
+    wireOfflinePack();
     renderPacking();
     renderPermits();
     renderWeather();
+    restoreOfflinePack();
     renderLocation();
     renderShareQueue();
     if (navigator.onLine && shareQueueAll().length) {
