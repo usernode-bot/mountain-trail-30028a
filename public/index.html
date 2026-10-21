@@ -179,6 +179,18 @@
       <button type="button" id="notif-read" class="btn-text mt-1" hidden data-i18n="notif.markRead">Mark read</button>
     </section>
 
+    <!-- Map: the route drawn from the guide's own coordinates, north up,
+         with every stop on it. No outside tiles, so it works offline. -->
+    <section id="tab-map" role="tabpanel" aria-label="Map" data-i18n-label="tab.map" hidden>
+      <header>
+        <h1 class="font-display text-heading" data-i18n="map.title">Trail map</h1>
+        <p id="map-sub" class="mt-1 text-body text-muted"></p>
+      </header>
+      <figure id="trail-map" class="trail-map mt-4"></figure>
+      <p class="mt-3 flex items-center gap-1.5 text-small text-muted" data-i18n="map.offline">Drawn on this phone from the guide, so it works with no signal.</p>
+      <p class="mt-1 text-small text-muted" data-i18n="map.approx">Positions are approximate guide figures, not a survey map. Follow the trail markers on the ground.</p>
+    </section>
+
     <!-- Report: one tap sends. The app's one primary action lives here. -->
     <section id="tab-report" role="tabpanel" aria-label="Report" data-i18n-label="tab.report" hidden>
       <header>
@@ -326,6 +338,10 @@
         <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h7a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h7"/></svg>
         <span data-i18n="tab.trail">Trail</span>
       </button>
+      <button type="button" id="tabbtn-map" class="tab-item" role="tab" aria-selected="false">
+        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14"/><path d="M15 6v14"/></svg>
+        <span data-i18n="tab.map">Map</span>
+      </button>
       <button type="button" id="tabbtn-report" class="tab-item" role="tab" aria-selected="false">
         <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/></svg>
         <span data-i18n="tab.report">Report</span>
@@ -342,6 +358,7 @@
   </nav>
 
   <script src="/trail-data.js"></script>
+  <script src="/trail-map.js"></script>
   <script src="/packing.js"></script>
   <script src="/status.js"></script>
   <script src="/share-links.js"></script>
