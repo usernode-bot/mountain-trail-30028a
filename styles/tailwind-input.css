@@ -392,6 +392,53 @@
     padding: 5px 11px;
   }
 
+  /* The Map tab: the route drawn north up from the guide's coordinates,
+     in the trail line's own dashes, with the same round stop nodes. */
+  .trail-map {
+    @apply m-0 overflow-hidden rounded-xl border border-line bg-surface;
+  }
+  .trail-map > svg { @apply block h-auto w-full; }
+  .map-route {
+    fill: none;
+    stroke: rgb(var(--muted) / 0.7);
+    stroke-width: 2.5;
+    stroke-dasharray: 6 5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .map-node circle.map-node-ring {
+    fill: rgb(var(--surface));
+    stroke: rgb(var(--line));
+    stroke-width: 2;
+  }
+  .map-node-end circle.map-node-ring { stroke: rgb(var(--accent)); }
+  .map-node { cursor: pointer; color: rgb(var(--fg)); }
+  .map-node:focus { outline: none; }
+  .map-node:focus-visible circle.map-node-ring,
+  .map-node-on circle.map-node-ring {
+    stroke: rgb(var(--accent));
+    stroke-width: 3;
+  }
+  .map-label {
+    fill: rgb(var(--fg));
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .map-label-sub {
+    fill: rgb(var(--muted));
+    font-size: 11px;
+  }
+  .map-mark {
+    fill: none;
+    stroke: rgb(var(--muted));
+    stroke-width: 1.5;
+    stroke-linecap: round;
+  }
+  .map-mark-text {
+    fill: rgb(var(--muted));
+    font-size: 11px;
+  }
+
   /* The Report tab's seven large buttons. One tap sends; no form first. */
   .condition-button {
     @apply flex flex-col items-start gap-1 rounded-xl border border-line bg-surface p-3.5 text-left

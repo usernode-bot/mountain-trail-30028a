@@ -250,6 +250,15 @@ Re-theme by changing the token values there, keeping every text pair at
   hard), shown under the route description on the Trail tab and approximate
   like the other route figures. A route without one shows nothing. The
   server does not read it.
+- The Map tab (`#map`, "Peta", request #36 phase 1) draws the default
+  route north up from the stops' own `lat`/`lng` (`public/trail-map.js`,
+  pure and tested) as an inline SVG: the dashed route, one node per stop
+  with its kind's icon, a scale bar. No outside map tiles, so it works
+  offline with the guide; `trail-map.js` is precached like the other shell
+  files. Tapping a node opens the stop's card in a sheet with "Report
+  here". Water sources, GPS, the height profile, report pins and map
+  layers are later phases; satellite or contour imagery needs an outside
+  tile service the app's admin has not approved.
 - Geolocation is first asked for only on the tap of "Update my location". Once permission is granted, the
   app re-reads the position about every 20 minutes while it is open (never prompting on its own), and keeps
   the last fix and its timestamp when a read fails.

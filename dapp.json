@@ -49,6 +49,19 @@
       ]
     },
     {
+      "id": "map.default",
+      "name": "Map tab draws the route with its stops",
+      "path": "/#map",
+      "expectSelector": "#trail-map [data-map-stop='puncak-gede']",
+      "visual": true,
+      "impact": [
+        "public/trail-map.js",
+        "public/app.js",
+        "public/index.html",
+        "styles/**"
+      ]
+    },
+    {
       "name": "Report tab",
       "path": "/#report",
       "expectSelector": "#condition-buttons"

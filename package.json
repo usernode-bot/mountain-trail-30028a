@@ -8,7 +8,7 @@
     "start": "node server.js",
     "build": "npm run build:css",
     "build:css": "tailwindcss -c tailwind.config.js -i styles/tailwind-input.css -o public/tailwind.css --minify",
-    "test": "node --test test/packing.test.js test/trail.test.js test/share-links.test.js test/location.test.js test/brand.test.js test/status.test.js test/i18n.test.js"
+    "test": "node --test test/packing.test.js test/trail.test.js test/share-links.test.js test/location.test.js test/brand.test.js test/status.test.js test/i18n.test.js test/map.test.js"
   },
   "dependencies": {
     "express": "^4.21.0",

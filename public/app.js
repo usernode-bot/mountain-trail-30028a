@@ -1,5 +1,5 @@
 /*
- * Mountain Trail's whole UI. Hash routing for the four tabs; the guide and
+ * Mountain Trail's whole UI. Hash routing for the five tabs; the guide and
  * packing rules come from trail-data.js and packing.js; reports go through
  * the server; the checklist, last location, name and contact live only in
  * localStorage. A location taken with an account is also sent to the server
@@ -199,9 +199,9 @@
   }
   // Presents content in a bottom sheet, or a plain overlay when the kit is
   // missing. Returns { dismiss } either way, so the caller can close the
-  // sheet itself and learn when it is gone.
-  function presentSheet(contentEl) {
-    var onDismiss = null;
+  // sheet itself; onClose, when given, runs once when it is gone.
+  function presentSheet(contentEl, onClose) {
+    var onDismiss = onClose || null;
     function fireDismiss() {
       if (onDismiss) { var f = onDismiss; onDismiss = null; f(); }
     }
@@ -324,6 +324,7 @@
     renderLangButtons();
     renderHeader();
     renderReportsAndTrail();
+    renderMap();
     renderPermits();
     renderWeather();
     renderOfflinePack();
@@ -338,7 +339,7 @@
   }
 
   // ── Tabs ───────────────────────────────────────────────────────────────
-  var TABS = ['trail', 'report', 'packing', 'location'];
+  var TABS = ['trail', 'map', 'report', 'packing', 'location'];
   function switchTab(name) {
     if (TABS.indexOf(name) < 0) name = 'trail';
     TABS.forEach(function (t) {
@@ -925,6 +926,85 @@
   }
   function fmtLeg(leg) {
     return fmtDur(leg.min) + ', +' + fmtM(leg.climbM) + ' m';
+  }
+
+  // ── Map tab ────────────────────────────────────────────────────────────
+  // The route drawn north up from the guide's coordinates (trail-map.js),
+  // every stop a node with its kind's icon and its name to the east.
+  // Tapping a node opens the stop's card in a sheet. Phase 1 of request
+  // #36: water sources, GPS, the height profile and report pins come later.
+  var mapStop = null; // the stop whose card is open, ringed on the map
+  function renderMap() {
+    var box = $('trail-map');
+    if (!box || !window.MT_MAP) return;
+    $('map-sub').textContent = t('map.sub', { summit: STOPS[STOPS.length - 1].name });
+    var W = 358;
+    var geo = MT_MAP.project(STOPS, W, { top: 44, right: 150, bottom: 52, left: 28 });
+    var byId = {};
+    geo.points.forEach(function (p) { byId[p.id] = p; });
+    var line = geo.points.map(function (p) { return p.x.toFixed(1) + ',' + p.y.toFixed(1); }).join(' ');
+    // Names sit east of their node; one closer than 30 px below the last
+    // label is pushed down so close stops stay readable.
+    var lastLabelY = -Infinity;
+    var nodes = STOPS.map(function (s, i) {
+      var p = byId[s.id];
+      var ly = Math.max(p.y - 1, lastLabelY + 30);
+      lastLabelY = ly;
+      var end = i === 0 || i === STOPS.length - 1;
+      var sub = fmtM(s.elevM) + ' m';
+      return '<g class="map-node' + (end ? ' map-node-end' : '') + (mapStop === s.id ? ' map-node-on' : '') +
+        '" data-map-stop="' + s.id + '" role="button" tabindex="0" aria-label="' + esc(s.name + ', ' + sub) + '">' +
+        '<circle cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="22" fill="transparent"/>' +
+        '<circle class="map-node-ring" cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="13"/>' +
+        '<g transform="translate(' + (p.x - 8).toFixed(1) + ' ' + (p.y - 8).toFixed(1) + ') scale(0.6667)" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[stopIcon(s)] + '</g>' +
+        '<text class="map-label" x="' + (p.x + 20).toFixed(1) + '" y="' + ly.toFixed(1) + '">' + esc(s.name) + '</text>' +
+        '<text class="map-label-sub" x="' + (p.x + 20).toFixed(1) + '" y="' + (ly + 13).toFixed(1) + '">' + esc(sub) + '</text>' +
+        '</g>';
+    }).join('');
+    var bar = MT_MAP.scaleBar(geo.pxPerKm, 110);
+    var bx1 = W - 20, bx0 = bx1 - bar.px, by = geo.height - 18;
+    var scale = '<path class="map-mark" d="M' + bx0.toFixed(1) + ' ' + (by - 5) + 'v5h' + bar.px.toFixed(1) + 'v-5"/>' +
+      '<text class="map-mark-text" x="' + bx1 + '" y="' + (by - 9) + '" text-anchor="end">' + esc(fmtKm(bar.km)) + ' km</text>';
+    var north = '<path class="map-mark" d="M28 30V12M22 18l6-6 6 6"/>' +
+      '<text class="map-mark-text" x="28" y="44" text-anchor="middle">' + esc(t('map.north')) + '</text>';
+    box.innerHTML =
+      '<svg viewBox="0 0 ' + W + ' ' + geo.height.toFixed(0) + '" role="group" aria-label="' + esc(t('map.aria')) + '">' +
+      north + '<polyline class="map-route" points="' + line + '"/>' + nodes + scale + '</svg>';
+    Array.prototype.forEach.call(box.querySelectorAll('[data-map-stop]'), function (g) {
+      function open() { openMapStop(g.getAttribute('data-map-stop')); }
+      g.addEventListener('click', open);
+      g.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+      });
+    });
+  }
+  function openMapStop(id) {
+    var s = STOP_BY_ID[id];
+    if (!s) return;
+    mapStop = id;
+    renderMap();
+    var first = s.id === STOPS[0].id;
+    var wrap = document.createElement('div');
+    wrap.className = 'flex flex-col gap-2 p-4';
+    wrap.setAttribute('data-map-card', s.id);
+    wrap.innerHTML =
+      '<div class="flex items-center gap-3">' +
+      '<span class="stop-node' + stopTone(s) + '">' + iconSvg(stopIcon(s), 'h-5 w-5') + '</span>' +
+      '<div class="min-w-0"><p class="font-display text-heading">' + esc(s.name) + '</p>' +
+      '<p class="text-small text-muted">' + esc(t('map.meta', { m: fmtM(s.elevM), km: fmtKm(s.km) })) + ' ' +
+      esc(first ? t('map.start') : t('map.fromBase', { time: fmtDur(MIN_FROM_BASECAMP[s.id]) })) + '</p></div></div>' +
+      '<p class="text-body">' + esc(tx('stop.' + s.id + '.detail', s.detail)) + '</p>' +
+      '<button type="button" class="btn-secondary mt-2" data-map-report>' + esc(t('stops.report.here')) + '</button>';
+    // The ring follows the open card and clears when it closes.
+    var handle = presentSheet(wrap, function () {
+      if (mapStop === id) { mapStop = null; renderMap(); }
+    });
+    wrap.querySelector('[data-map-report]').addEventListener('click', function () {
+      handle.dismiss();
+      setPicker(s.id);
+      switchTab('report');
+      window.scrollTo({ top: 0 });
+    });
   }
 
   // ── Report tab ─────────────────────────────────────────────────────────
@@ -2252,6 +2332,7 @@
       kitToast(t('toast.queued'));
     }
     renderReportsAndTrail();
+    renderMap();
     renderPickerHint();
     TABS.forEach(function (name) {
       $('tabbtn-' + name).addEventListener('click', function () { switchTab(name); });

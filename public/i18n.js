@@ -23,9 +23,21 @@
       // ── Shared chrome ──
       'demo.line': 'Staging demo: the hikers, reports and trip here are made up.',
       'tab.trail': 'Trail',
+      'tab.map': 'Map',
       'tab.report': 'Report',
       'tab.packing': 'Packing',
       'tab.location': 'Location',
+
+      // ── Map tab ──
+      'map.title': 'Trail map',
+      'map.sub': 'Cibodas route from basecamp to {summit}. Tap a stop for its details.',
+      'map.offline': 'Drawn on this phone from the guide, so it works with no signal.',
+      'map.approx': 'Positions are approximate guide figures, not a survey map. Follow the trail markers on the ground.',
+      'map.aria': 'Map of the Cibodas route with its stops, north up',
+      'map.north': 'N',
+      'map.meta': '{m} m, km {km}.',
+      'map.start': 'Where the walk starts.',
+      'map.fromBase': 'About {time} from basecamp.',
 
       // ── Trail tab ──
       'trail.route': 'Cibodas route to Puncak Gede, {elev} m. {km} km and {climb} m of climbing, about {hours} hours up.',
@@ -365,9 +377,21 @@
       // ── Shared chrome ──
       'demo.line': 'Demo staging: pendaki, laporan dan perjalanan di sini dibuat-buat.',
       'tab.trail': 'Jalur',
+      'tab.map': 'Peta',
       'tab.report': 'Lapor',
       'tab.packing': 'Bawaan',
       'tab.location': 'Lokasi',
+
+      // ── Map tab ──
+      'map.title': 'Peta jalur',
+      'map.sub': 'Jalur Cibodas dari basecamp sampai {summit}. Ketuk pos untuk detailnya.',
+      'map.offline': 'Digambar di ponsel ini dari panduan, jadi tetap bisa dibuka tanpa sinyal.',
+      'map.approx': 'Posisi adalah perkiraan panduan, bukan peta survei. Ikuti penanda jalur di lapangan.',
+      'map.aria': 'Peta jalur Cibodas dengan pos-posnya, utara di atas',
+      'map.north': 'U',
+      'map.meta': '{m} m, km {km}.',
+      'map.start': 'Titik awal pendakian.',
+      'map.fromBase': 'Sekitar {time} dari basecamp.',
 
       // ── Trail tab ──
       'trail.route': 'Jalur Cibodas ke Puncak Gede, {elev} m. {km} km dengan tanjakan {climb} m, sekitar {hours} jam naik.',
