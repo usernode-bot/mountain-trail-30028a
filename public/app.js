@@ -72,6 +72,7 @@
     lembah: '<path d="M2 5c2 8 5 11 10 11s8-3 10-11"/><path d="M7 20c2-1 3 1 5 0s3 1 5 0"/>',
     junction: '<path d="M12 21v-8"/><path d="M12 13L6 3"/><path d="M12 13l6-10"/>',
     bookmark: '<path d="M6 3h12v18l-6-4-6 4z"/>',
+    filter: '<path d="M4 7h16"/><path d="M7 12h10"/><path d="M10 17h4"/>',
     bookmarkOn: '<path d="M6 3h12v18l-6-4-6 4z" fill="currentColor"/>',
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M4.9 4.9l1.4 1.4"/><path d="M17.7 17.7l1.4 1.4"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M4.9 19.1l1.4-1.4"/><path d="M17.7 6.3l1.4-1.4"/>',
     moon: '<path d="M20 15.5A8.5 8.5 0 0 1 8.5 4a8.5 8.5 0 1 0 11.5 11.5z"/>',
@@ -205,7 +206,7 @@
   }
 
   // The catalog's filter state lives for the session only, never stored.
-  var catalogState = { q: '', difficulty: 'all', height: 'all', status: 'all', savedOnly: false };
+  var catalogState = { q: '', difficulty: 'all', height: 'all', island: 'all', status: 'all', savedOnly: false };
 
   // ── Kit shims (the bridge or native kit may be missing on a plain run) ──
   function kitToast(msg) {
@@ -544,7 +545,16 @@
 
   function catalogActive() {
     return !!(catalogState.q || catalogState.difficulty !== 'all' ||
-      catalogState.height !== 'all' || catalogState.status !== 'all' || catalogState.savedOnly);
+      catalogState.height !== 'all' || catalogState.island !== 'all' ||
+      catalogState.status !== 'all' || catalogState.savedOnly);
+  }
+
+  // How many of the sheet's four filter groups are not on All. Search and
+  // Saved are not counted: they stay on the main screen.
+  function catalogFilterCount() {
+    return ['difficulty', 'height', 'island', 'status'].filter(function (k) {
+      return catalogState[k] !== 'all';
+    }).length;
   }
 
   function statusWord(level) {
@@ -593,54 +603,100 @@
       iconSvg(saved ? 'bookmarkOn' : 'bookmark', 'h-5 w-5') + '</button></li>';
   }
 
-  function catalogChip(attr, value, label, on) {
-    return '<button type="button" class="chip' + (on ? ' chip-on' : '') + '" data-' + attr + '="' + value +
-      '" aria-pressed="' + on + '">' + esc(label) + '</button>';
+  function heightLabel(id) {
+    if (id === 'all') return t('type.all');
+    if (id === 'low') return t('catalog.height.low', { m: fmtM(2000) });
+    if (id === 'mid') return t('catalog.height.mid', { low: fmtM(2000), high: fmtM(2999) });
+    return t('catalog.height.high', { m: fmtM(3000) });
+  }
+
+  // The catalog's filter groups, in the order the panel shows them.
+  function catalogFilterGroups() {
+    return [
+      {
+        key: 'difficulty',
+        label: t('catalog.filter.difficulty'),
+        options: ['all'].concat(M.DIFFICULTIES),
+        labelFor: function (id) { return id === 'all' ? t('type.all') : t('diff.' + id); },
+      },
+      {
+        key: 'height',
+        label: t('catalog.filter.height'),
+        options: ['all'].concat(CAT.HEIGHT_BANDS),
+        labelFor: heightLabel,
+      },
+      {
+        key: 'island',
+        label: t('catalog.filter.island'),
+        options: ['all'].concat(M.ISLANDS),
+        labelFor: function (id) { return id === 'all' ? t('catalog.filter.allIslands') : t('island.' + id); },
+      },
+      {
+        key: 'status',
+        label: t('catalog.filter.status'),
+        options: ['all', 'open', 'limited', 'closed'],
+        labelFor: function (id) { return id === 'all' ? t('type.all') : statusWord(id); },
+      },
+    ];
   }
 
   function renderCatalogFilters() {
     var el = $('catalog-filters');
     if (!el) return;
-    var diffs = ['all'].concat(M.DIFFICULTIES);
-    var heights = ['all'].concat(CAT.HEIGHT_BANDS);
-    var statuses = ['all', 'open', 'limited', 'closed'];
-    function heightLabel(id) {
-      if (id === 'all') return t('type.all');
-      if (id === 'low') return t('catalog.height.low', { m: fmtM(2000) });
-      if (id === 'mid') return t('catalog.height.mid', { low: fmtM(2000), high: fmtM(2999) });
-      return t('catalog.height.high', { m: fmtM(3000) });
+    var n = catalogFilterCount();
+    var label = n ? t('catalog.filterAria', { n: n }) : t('catalog.filter');
+    el.innerHTML = '<button type="button" class="chip' + (n ? ' chip-on' : '') +
+      '" aria-haspopup="dialog" aria-label="' + esc(label) + '">' +
+      iconSvg('filter', 'h-4 w-4') + esc(t('catalog.filter')) +
+      (n ? '<span class="chip-count">' + n + '</span>' : '') + '</button>';
+    el.querySelector('button').addEventListener('click', openCatalogFilters);
+  }
+
+  // One bottom sheet for every catalog filter: full-width rows, so no label
+  // is cut off. A tap applies at once and keeps the panel open.
+  function openCatalogFilters() {
+    var wrap = document.createElement('div');
+    wrap.className = 'flex flex-col gap-3 p-4';
+    // Four groups of rows are taller than a phone; the sheet itself does not
+    // scroll, so cap the content and let it scroll inside the sheet.
+    wrap.style.maxHeight = '80vh';
+    wrap.style.overflowY = 'auto';
+    var html = '<h2 class="font-display text-heading">' + esc(t('catalog.filter')) + '</h2>';
+    catalogFilterGroups().forEach(function (g) {
+      html += '<div><p class="section-label mt-2">' + esc(g.label) + '</p><ul class="list">' +
+        g.options.map(function (id) {
+          return '<li><button type="button" class="list-row w-full text-left text-body" data-cat-group="' + g.key +
+            '" data-cat-value="' + esc(id) + '"><span>' + esc(g.labelFor(id)) + '</span>' +
+            '<span class="ml-auto' + (catalogState[g.key] === id ? ' text-accent' : ' hidden') + '" data-tick>' +
+            iconSvg('check', 'h-5 w-5') + '</span></button></li>';
+        }).join('') + '</ul></div>';
+    });
+    html += '<button type="button" class="btn-primary w-full" data-cat-done>' + esc(t('catalog.filter.done')) + '</button>';
+    wrap.innerHTML = html;
+    var handle = presentSheet(wrap);
+
+    function syncRows() {
+      Array.prototype.forEach.call(wrap.querySelectorAll('[data-cat-group]'), function (btn) {
+        var on = catalogState[btn.getAttribute('data-cat-group')] === btn.getAttribute('data-cat-value');
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        btn.classList.toggle('font-semibold', on);
+        btn.classList.toggle('text-accent', on);
+        var tick = btn.querySelector('[data-tick]');
+        if (tick) tick.classList.toggle('hidden', !on);
+      });
     }
-    el.innerHTML =
-      '<p class="section-label mt-4">' + esc(t('catalog.filter.difficulty')) + '</p>' +
-      '<div class="chip-row">' + diffs.map(function (id) {
-        return catalogChip('cat-diff', id, id === 'all' ? t('type.all') : t('diff.' + id), catalogState.difficulty === id);
-      }).join('') + '</div>' +
-      '<p class="section-label">' + esc(t('catalog.filter.height')) + '</p>' +
-      '<div class="chip-row">' + heights.map(function (id) {
-        return catalogChip('cat-height', id, heightLabel(id), catalogState.height === id);
-      }).join('') + '</div>' +
-      '<p class="section-label">' + esc(t('catalog.filter.status')) + '</p>' +
-      '<div class="chip-row">' + statuses.map(function (id) {
-        return catalogChip('cat-status', id, id === 'all' ? t('type.all') : statusWord(id), catalogState.status === id);
-      }).join('') + '</div>';
-    Array.prototype.forEach.call(el.querySelectorAll('[data-cat-diff]'), function (btn) {
-      btn.addEventListener('click', function () {
-        catalogState.difficulty = btn.getAttribute('data-cat-diff');
+
+    wrap.addEventListener('click', function (e) {
+      var btn = e.target && e.target.closest ? e.target.closest('[data-cat-group]') : null;
+      if (btn) {
+        catalogState[btn.getAttribute('data-cat-group')] = btn.getAttribute('data-cat-value');
+        syncRows();
         renderCatalogResults();
-      });
+        return;
+      }
+      if (e.target && e.target.closest && e.target.closest('[data-cat-done]')) handle.dismiss();
     });
-    Array.prototype.forEach.call(el.querySelectorAll('[data-cat-height]'), function (btn) {
-      btn.addEventListener('click', function () {
-        catalogState.height = btn.getAttribute('data-cat-height');
-        renderCatalogResults();
-      });
-    });
-    Array.prototype.forEach.call(el.querySelectorAll('[data-cat-status]'), function (btn) {
-      btn.addEventListener('click', function () {
-        catalogState.status = btn.getAttribute('data-cat-status');
-        renderCatalogResults();
-      });
-    });
+    syncRows();
   }
 
   function renderCatalogResults() {
@@ -660,6 +716,7 @@
       q: catalogState.q,
       difficulty: catalogState.difficulty,
       height: catalogState.height,
+      island: catalogState.island,
       status: catalogState.status,
       savedOnly: catalogState.savedOnly,
       savedIds: savedMountains(),
@@ -721,7 +778,7 @@
   }
 
   function clearCatalog() {
-    catalogState = { q: '', difficulty: 'all', height: 'all', status: 'all', savedOnly: false };
+    catalogState = { q: '', difficulty: 'all', height: 'all', island: 'all', status: 'all', savedOnly: false };
     var input = $('mountain-search');
     if (input) input.value = '';
     renderCatalogResults();

@@ -278,6 +278,8 @@ Re-theme by changing the token values there, keeping every text pair at
   default route (`mountainView`), so the screens and `server.js` read one
   shape; the server validates reports against `ALL_STOPS`.
 - The Mountains tab (`public/catalog.js`) filters and groups by island.
+  Its Difficulty, Height, Island and Status filters live in one Filter
+  sheet, session-only like the search.
   The selected mountain lives in `mt:mountain` and `?mountain=<id>`; its
   four guide tabs read the same data as Gede Pangrango. Saved guides live
   in `mt:savedMountains` on the phone only. Reports, the nearest stop and
