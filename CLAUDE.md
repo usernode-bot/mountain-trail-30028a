@@ -167,6 +167,15 @@ request changes the look on purpose.
 - **Filter chips:** `chip` / `chip-on` above the trail line (All, Post,
   Water, Camp, Junction, each with its count of stops), shaped like the
   profile's stop chips. A junction (a side path leaves) is a forked line.
+- **Mountain cards:** every mountain on the Mountains tab is a card
+  (`mtn-cards`, `mtn-card`): the Trail tab's mountain banner shrunk to a
+  card, with a soft green band and ridgeline, the status chip over it, the
+  landscape icon and name beside the summit height, the province, the time
+  up and a bookmark button of its own in the top corner. The difficulty
+  badge (`diff-badge`) is the one place difficulty takes a colour: green
+  for Easy, amber for Moderate, red for Hard, always with its three-step
+  meter so the level reads without the colour. The Trail tab keeps its
+  neutral meter.
 
 The kit is in `styles/tailwind-input.css`: colour tokens with a light and
 a dark value (named in `tailwind.config.js`), and components

@@ -484,6 +484,75 @@
   .diff-meter i:nth-child(2) { @apply h-2; }
   .diff-meter i:nth-child(3) { @apply h-3; }
   .diff-meter i.on { @apply bg-fg; }
+
+  /* Mountain cards: the catalog's mountains, each the Trail tab's mountain
+     banner shrunk to a card. The band is the same sky family, soft green in
+     both looks, with the ridge silhouette under it and the trail status on
+     top. The difficulty badge is the one place difficulty takes a colour;
+     the Trail tab keeps its neutral meter. */
+  .mtn-cards { @apply m-0 flex list-none flex-col gap-3 p-0; }
+  .mtn-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 1.25rem;
+    border: 1px solid rgb(var(--line));
+    background: rgb(var(--surface));
+  }
+  .mtn-card-open {
+    @apply block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus;
+  }
+  .mtn-card-band {
+    position: relative;
+    display: flex;
+    height: 72px;
+    align-items: flex-start;
+    padding: 12px 64px 0 16px;
+    background:
+      radial-gradient(120% 130% at 88% 0%, rgb(var(--sky-2) / 0.9), transparent 64%),
+      linear-gradient(160deg, rgb(var(--sky-2)) 0%, rgb(var(--sky-3)) 100%);
+  }
+  .mtn-card-ridge {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 34px;
+    background: rgb(var(--ridge));
+    opacity: 0.28;
+    clip-path: polygon(0 70%, 12% 44%, 22% 60%, 36% 18%, 48% 56%, 60% 38%, 72% 64%, 84% 30%, 94% 52%, 100% 42%, 100% 100%, 0 100%);
+    pointer-events: none;
+  }
+  .mtn-card-body { @apply block px-5 pb-5 pt-3; }
+  .mtn-card-head { @apply flex items-baseline gap-2; }
+  .mtn-card-name { @apply flex min-w-0 flex-1 items-center gap-1.5 font-display text-heading; }
+  .mtn-card-name svg { @apply flex-none text-muted; }
+  .mtn-card-elev {
+    @apply whitespace-nowrap font-display text-heading;
+    font-variant-numeric: tabular-nums;
+  }
+  .mtn-card-elev span { @apply text-small font-medium text-muted; }
+  .mtn-card-place { @apply mt-0.5 block text-small text-muted; }
+  .mtn-card-facts { @apply mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-small; }
+  .mtn-card-time { @apply inline-flex items-center gap-1 text-muted; }
+  /* Difficulty: green, amber, red, in the kit's already-checked text pairs.
+     The three-step meter stays, so the level reads without the colour. */
+  .diff-badge { @apply inline-flex min-h-7 items-center gap-1.5 rounded-full px-2.5 font-semibold; }
+  .diff-badge-accent { @apply bg-accent text-on-accent; }
+  .diff-badge-warn { @apply bg-warn text-on-warn; }
+  .diff-badge-danger { @apply bg-danger text-on-danger; }
+  .diff-badge .diff-meter i { background: currentColor; opacity: 0.4; }
+  .diff-badge .diff-meter i.on { opacity: 1; }
+  /* The card's save button, over the band's top corner. A sibling of the
+     open button, never nested in it. */
+  .mtn-card-save {
+    @apply absolute right-2 top-2 z-10 flex h-11 w-11 items-center justify-center rounded-full border text-fg
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus;
+    background: rgb(var(--surface) / 0.78);
+    border-color: rgb(var(--line) / 0.85);
+  }
+  .mtn-card-save:hover { background: rgb(var(--surface) / 0.95); }
+  .mtn-card-save[aria-pressed="true"] { @apply text-accent; }
+
   /* One stop or none left by the stop-type filter: no rail to draw. */
   .trail-line-bare::before { display: none; }
 

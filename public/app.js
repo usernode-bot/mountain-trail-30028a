@@ -72,6 +72,7 @@
     lembah: '<path d="M2 5c2 8 5 11 10 11s8-3 10-11"/><path d="M7 20c2-1 3 1 5 0s3 1 5 0"/>',
     junction: '<path d="M12 21v-8"/><path d="M12 13L6 3"/><path d="M12 13l6-10"/>',
     bookmark: '<path d="M6 3h12v18l-6-4-6 4z"/>',
+    bookmarkOn: '<path d="M6 3h12v18l-6-4-6 4z" fill="currentColor"/>',
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M4.9 4.9l1.4 1.4"/><path d="M17.7 17.7l1.4 1.4"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M4.9 19.1l1.4-1.4"/><path d="M17.7 6.3l1.4-1.4"/>',
     moon: '<path d="M20 15.5A8.5 8.5 0 0 1 8.5 4a8.5 8.5 0 1 0 11.5 11.5z"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.5v.01"/>',
@@ -550,29 +551,46 @@
     return t('banner.' + level);
   }
 
-  function statusDotClass(level) {
-    var tone = ST.statusTone(level);
-    return tone === 'danger' ? 'bg-danger' : (tone === 'warn' ? 'bg-warn' : 'bg-accent');
-  }
-  function statusTextClass(level) {
-    var tone = ST.statusTone(level);
-    return tone === 'danger' ? 'text-danger' : (tone === 'warn' ? 'text-warn' : 'text-accent');
-  }
-
-  function catalogRow(e) {
+  // One mountain as a card: the soft green ridge band with its trail status,
+  // then the name and height, the province, a coloured difficulty badge and
+  // the route's time up. The save button is a sibling of the open button so
+  // it does not open the guide.
+  function catalogCard(e) {
     var level = e.status && e.status.level;
-    var dot = level ? '<span class="mr-1 inline-block h-2 w-2 rounded-full ' + statusDotClass(level) + '"></span>' : '';
-    var status = level ? '<span class="' + statusTextClass(level) + '">' + dot + esc(statusWord(level)) + '</span>' : '';
-    var bookmark = e.saved ? '<span class="ml-1 text-accent">' + iconSvg('bookmark', 'h-4 w-4') + '</span>' : '';
-    return '<li><button type="button" class="list-row w-full text-left" data-mountain="' + e.id + '"' +
+    var status = level
+      ? '<span class="hero-chip hero-chip-' + ST.statusTone(level) + '">' +
+        '<span class="hero-chip-dot"></span>' + esc(statusWord(level)) + '</span>'
+      : '';
+    var tone = CAT.difficultyTone(e.difficulty);
+    var at = M.DIFFICULTIES.indexOf(e.difficulty);
+    var badge = tone
+      ? '<span class="diff-badge diff-badge-' + tone + '">' +
+        '<span class="diff-meter" aria-hidden="true">' +
+        '<i' + (at >= 0 ? ' class="on"' : '') + '></i>' +
+        '<i' + (at >= 1 ? ' class="on"' : '') + '></i>' +
+        '<i' + (at >= 2 ? ' class="on"' : '') + '></i>' +
+        '</span>' + esc(t('diff.' + e.difficulty)) + '</span>'
+      : '';
+    var saved = e.saved === true;
+    return '<li class="mtn-card">' +
+      '<button type="button" class="mtn-card-open" data-mountain="' + e.id + '"' +
       (e.id === currentDestId ? ' aria-current="true"' : '') + '>' +
-      '<span class="stop-node text-muted">' + iconSvg(e.category, 'h-5 w-5') + '</span>' +
-      '<span class="min-w-0 flex-1"><span class="flex items-center text-body font-semibold">' + esc(e.name) + bookmark + '</span>' +
-      '<span class="mt-0.5 block text-small text-muted">' + esc(e.province) + ' · ' + fmtM(e.summitM) + ' m</span></span>' +
-      '<span class="ml-auto flex flex-none flex-col items-end gap-0.5 text-small">' +
-      '<span class="flex items-center">' + status + '</span>' +
-      '<span class="text-muted">' + esc(t('diff.' + e.difficulty)) + '</span></span>' +
-      '</button></li>';
+      '<span class="mtn-card-band">' + status +
+      '<span class="mtn-card-ridge" aria-hidden="true"></span></span>' +
+      '<span class="mtn-card-body">' +
+      '<span class="mtn-card-head">' +
+      '<span class="mtn-card-name">' + iconSvg(e.category, 'h-5 w-5') + esc(e.name) + '</span>' +
+      '<span class="mtn-card-elev">' + esc(fmtM(e.summitM)) + ' <span>m</span></span>' +
+      '</span>' +
+      '<span class="mtn-card-place">' + esc(e.province) + '</span>' +
+      '<span class="mtn-card-facts">' + badge +
+      '<span class="mtn-card-time">' + iconSvg('clock', 'h-4 w-4') +
+      esc(t('catalog.card.up', { hours: fmtHours(e) })) + '</span>' +
+      '</span></span></button>' +
+      '<button type="button" class="mtn-card-save" data-save-mountain="' + e.id + '"' +
+      ' aria-pressed="' + saved + '" aria-label="' +
+      esc(t(saved ? 'catalog.card.unsave' : 'catalog.card.save', { name: e.name })) + '">' +
+      iconSvg(saved ? 'bookmarkOn' : 'bookmark', 'h-5 w-5') + '</button></li>';
   }
 
   function catalogChip(attr, value, label, on) {
@@ -667,14 +685,14 @@
       var popular = CAT.popularEntries(entries, M.POPULAR);
       if (popular.length) {
         html += '<p class="section-label mt-5">' + esc(t('catalog.popular')) + '</p>' +
-          '<ul class="list">' + popular.map(catalogRow).join('') + '</ul>';
+          '<ul class="mtn-cards">' + popular.map(catalogCard).join('') + '</ul>';
       }
       html += '<p class="section-label mt-6">' + esc(t('catalog.all')) + '</p>';
     }
     CAT.groupByIsland(shown, M.ISLANDS).forEach(function (g) {
       html += '<h3 class="section-label mt-4">' + esc(t('island.' + g.island)) +
         ' <span class="chip-count">' + g.entries.length + '</span></h3>' +
-        '<ul class="list">' + g.entries.map(catalogRow).join('') + '</ul>';
+        '<ul class="mtn-cards">' + g.entries.map(catalogCard).join('') + '</ul>';
     });
     el.innerHTML = html;
     Array.prototype.forEach.call(el.querySelectorAll('[data-mountain]'), function (btn) {
@@ -683,6 +701,21 @@
         selectMountain(id);
         switchTab('trail');
         window.scrollTo({ top: 0 });
+      });
+    });
+    // A mountain can show twice (Popular and its island), so the tapped save
+    // button is found again by its index, not by the mountain's id alone.
+    Array.prototype.forEach.call(el.querySelectorAll('[data-save-mountain]'), function (btn, index) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-save-mountain');
+        toggleSaved(id).then(function () {
+          var next = el.querySelectorAll('[data-save-mountain]');
+          if (next[index] && next[index].getAttribute('data-save-mountain') === id) {
+            next[index].focus();
+          } else if (savedEl) {
+            savedEl.focus();
+          }
+        });
       });
     });
   }
@@ -2652,8 +2685,7 @@
 
   // The guide travels with the app; saving it pins it in the catalog and
   // confirms the shell really is cached. Nothing is sent.
-  async function toggleGuideSave() {
-    var id = MOUNTAIN.id;
+  async function toggleSaved(id) {
     var list = savedMountains();
     var at = list.indexOf(id);
     if (at >= 0) {
@@ -2818,7 +2850,7 @@
     wirePacking();
     wireCatalog();
     var guideSave = $('guide-save');
-    if (guideSave) guideSave.addEventListener('click', toggleGuideSave);
+    if (guideSave) guideSave.addEventListener('click', function () { toggleSaved(MOUNTAIN.id); });
     wireLocation();
     if (demo) seedDemoShare(); // after wireLocation fills the name and contact fields
     wirePhotoInput();
