@@ -196,8 +196,11 @@
      and the photo square at its right. The strip's text column is
      min-w-0 flex-1, so a long name wraps and the photo stays at the right. */
   .status-strip-open {
-    @apply block w-full rounded-md text-left text-body font-medium
+    /* A 44 px tap target that keeps the strip's height: the negative block
+       margins give back the height min-h-11 adds. */
+    @apply flex min-h-11 w-full items-center rounded-md text-left text-body font-medium
       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus;
+    margin-block: -0.625rem;
   }
   .status-strip-photo {
     @apply relative flex h-11 w-11 flex-none items-center justify-center overflow-hidden rounded-lg bg-raised text-muted
@@ -250,7 +253,7 @@
   }
   .est-line[hidden] { display: none; }
   .est-line-hero {
-    @apply relative px-4 pb-2.5 text-fg;
+    @apply relative px-5 pb-2.5 text-fg;
     z-index: 2;
   }
   .est-info {
@@ -260,6 +263,17 @@
     border-color: rgb(var(--line) / 0.85);
   }
   .est-info:hover { background: rgb(var(--surface) / 0.95); }
+
+  /* The native kit's switch is 51 by 31 px: give it a 44 px tall tap target
+     without changing the pill it draws. The padding makes the box taller
+     and the background paints only the 31 px content box, so the track
+     stays the same size; the thumb moves down with it. */
+  .un-switch {
+    min-height: 44px;
+    padding-block: 6.5px;
+    background-clip: content-box !important;
+  }
+  :where(html:not(.un-android)) .un-switch::before { top: 8.5px !important; }
 
   /* The two-per-row grid the weather card uses for basecamp and summit. */
   .wx-grid {
@@ -384,6 +398,10 @@
   .hero-scene {
     @apply relative mt-4 h-24 w-full;
     z-index: 1;
+    /* The ridgeline fades into the sky at the card's foot instead of
+       ending on a hard edge over the estimate row under it. */
+    -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 70%, transparent 100%);
   }
   .hero-scene-svg { @apply absolute inset-0 h-full w-full; }
   .ridge { fill: rgb(var(--ridge)); }
