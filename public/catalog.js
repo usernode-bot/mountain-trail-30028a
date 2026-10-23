@@ -15,6 +15,13 @@
   // 3,000 and above. Boundaries are inclusive at the bottom only.
   var HEIGHT_BANDS = ['low', 'mid', 'high'];
 
+  // The kit's colour tone for a route difficulty: green for easy, amber for
+  // moderate, red for hard. An unknown or missing rating has no badge.
+  var DIFFICULTY_TONES = { easy: 'accent', moderate: 'warn', hard: 'danger' };
+  function difficultyTone(d) {
+    return DIFFICULTY_TONES[d] || null;
+  }
+
   function heightBand(m) {
     if (!Number.isFinite(m)) return null;
     if (m < 2000) return 'low';
@@ -70,6 +77,7 @@
 
   return {
     HEIGHT_BANDS: HEIGHT_BANDS,
+    difficultyTone: difficultyTone,
     heightBand: heightBand,
     filterEntries: filterEntries,
     groupByIsland: groupByIsland,

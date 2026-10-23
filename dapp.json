@@ -47,6 +47,17 @@
       "expectSelector": "#mtn-difficulty .diff-meter"
     },
     {
+      "name": "Estimate label opens an explanation and shows the data date",
+      "path": "/",
+      "expectText": "Data updated 15 Oct 2026",
+      "expectSelector": "#mtn-hero .est-info[data-est=route]"
+    },
+    {
+      "name": "Catalog estimate label has its info button",
+      "path": "/#mountains",
+      "expectSelector": "#catalog-estimate .est-info[data-est=catalog]"
+    },
+    {
       "name": "Profile stop labels",
       "path": "/",
       "expectText": "km 0, start"
@@ -145,6 +156,12 @@
       "path": "/#mountains",
       "expectText": "Filter",
       "expectSelector": "#catalog-filters button"
+    },
+    {
+      "name": "Mountain cards show the difficulty badge and time up",
+      "path": "/#mountains",
+      "expectText": "About 8 to 10 hours up",
+      "expectSelector": "#catalog-results .mtn-card .diff-badge"
     },
     {
       "name": "A mountain opens its own guide",

@@ -136,3 +136,10 @@ test('numbers use the language’s separators', function () {
   assert.strictEqual(I18N.fmtKm('en', 9.6), '9.6');
   assert.strictEqual(I18N.fmtKm('id', 0), '0');
 });
+test('fmtDate writes a data date in each language, in UTC', function () {
+  assert.strictEqual(I18N.fmtDate('en', '2026-10-15T00:00:00Z'), '15 Oct 2026');
+  assert.strictEqual(I18N.fmtDate('id', '2026-10-15T00:00:00Z'), '15 Okt 2026');
+  assert.strictEqual(I18N.fmtDate('en', '2026-05-01T23:30:00Z'), '1 May 2026');
+  assert.strictEqual(I18N.fmtDate('id', null), '');
+  assert.strictEqual(I18N.fmtDate('en', 'not a date'), '');
+});

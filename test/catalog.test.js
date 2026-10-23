@@ -44,6 +44,15 @@ test('the island filter keeps only that island and composes', () => {
   assert.deepEqual(C.filterEntries(ENTRIES, { island: 'jawa', difficulty: 'hard' }).map((e) => e.id), ['semeru']);
 });
 
+test('difficulty tones are green, amber and red, and nothing else', () => {
+  assert.equal(C.difficultyTone('easy'), 'accent');
+  assert.equal(C.difficultyTone('moderate'), 'warn');
+  assert.equal(C.difficultyTone('hard'), 'danger');
+  assert.equal(C.difficultyTone('extreme'), null);
+  assert.equal(C.difficultyTone(null), null);
+  assert.equal(C.difficultyTone(undefined), null);
+});
+
 test('saved-only keeps the saved ids, in input order', () => {
   assert.deepEqual(
     C.filterEntries(ENTRIES, { savedOnly: true, savedIds: ['batur', 'semeru'] }).map((e) => e.id),
