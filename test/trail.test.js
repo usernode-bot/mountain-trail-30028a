@@ -32,7 +32,7 @@ test('minutes from basecamp add up each leg', () => {
     );
   }
   assert.equal(T.MIN_FROM_BASECAMP['puncak-gede'], 320);
-  assert.equal(Object.keys(T.MIN_FROM_BASECAMP).length, T.STOPS.length, 'one key per stop');
+  assert.equal(Object.keys(T.MIN_FROM_BASECAMP).length, T.ALL_STOPS.length, 'one key per stop');
 });
 
 test('nearestStop returns air-panas for its own coordinates', () => {
@@ -120,7 +120,7 @@ test('stop types: known kinds, and the chip counts count stops on the route', ()
 });
 
 test('destination > route > stop: Gede Pangrango by Cibodas holds the nine stops', () => {
-  assert.equal(T.DESTINATIONS.length, 1);
+  assert.ok(T.DESTINATIONS.length >= 40, 'the national edition holds at least 40 destinations');
   const d = T.DEST_BY_ID['gede-pangrango'];
   assert.equal(d.province, 'Jawa Barat');
   assert.deepEqual(d.routes.map((r) => r.id), ['cibodas']);
@@ -171,8 +171,70 @@ test('every route may carry a known difficulty, and Cibodas is hard', () => {
 });
 
 test('the existing stop ids are unchanged, so stored reports still resolve', () => {
-  assert.deepEqual(T.ALL_STOPS.map((s) => s.id), [
+  assert.deepEqual(T.STOPS.map((s) => s.id), [
     'cibodas', 'telaga-biru', 'rawa-gayonggong', 'panyancangan', 'air-panas',
     'kandang-batu', 'kandang-badak', 'tanjakan-setan', 'puncak-gede',
   ]);
+  T.STOPS.forEach((s) => assert.equal(T.STOP_BY_ID[s.id], s, s.id + ' still resolves globally'));
+});
+
+test('every island group is populated and every Popular id resolves', () => {
+  assert.deepEqual(T.ISLANDS, ['sumatra', 'jawa', 'bali', 'nusa-tenggara', 'kalimantan', 'sulawesi', 'maluku', 'papua']);
+  const counts = {};
+  T.DESTINATIONS.forEach((d) => {
+    assert.ok(T.ISLANDS.includes(d.island), d.id + ' island is known');
+    counts[d.island] = (counts[d.island] || 0) + 1;
+  });
+  T.ISLANDS.forEach((i) => assert.ok(counts[i] >= 4, i + ' has at least four destinations'));
+  assert.ok(T.POPULAR.length >= 6);
+  T.POPULAR.forEach((id) => assert.ok(T.DEST_BY_ID[id], 'popular id ' + id + ' resolves'));
+  assert.equal(T.DEFAULT_DESTINATION_ID, 'gede-pangrango');
+});
+
+test('every route carries figures, packing, a difficulty and at least two valid stops', () => {
+  const seen = new Set();
+  T.DESTINATIONS.forEach((d) => {
+    assert.ok(d.province, d.id + ' has a province');
+    assert.ok(T.LANDSCAPES.includes(d.category), d.id + ' category is known');
+    assert.ok(d.peaks.length > 0, d.id + ' has a peak');
+    assert.deepEqual(T.DIFFICULTIES.includes(d.routes[0].difficulty), true, d.id + ' difficulty is known');
+    assert.equal(d.status.verified, false, d.id + ' is not claimed as verified');
+    assert.ok(d.permits && d.permits.checkedAt, d.id + ' carries a permits block');
+    d.routes.forEach((r) => {
+      assert.equal(r.destinationId, d.id);
+      assert.ok(r.figures && typeof r.figures.verified === 'boolean', r.id + ' figures block');
+      assert.ok(Number.isFinite(r.packing.nightTempC), r.id + ' night temperature');
+      assert.ok(r.stops.length >= 2, r.id + ' has at least two stops');
+      assert.ok(r.stops[0].kinds.includes('basecamp'), r.id + ' starts at a basecamp');
+      assert.ok(r.stops[r.stops.length - 1].kinds.includes('summit'), r.id + ' ends at a summit');
+      assert.equal(r.stops[r.stops.length - 1].elevM, r.summitM, r.id + ' summit height');
+      r.stops.forEach((s, i) => {
+        assert.ok(!seen.has(s.id), s.id + ' is unique');
+        seen.add(s.id);
+        assert.ok(s.id.startsWith(r.id + '-') || r.id === 'cibodas', s.id + ' is prefixed with its route');
+        assert.ok(s.short && s.detail, s.id + ' has guide text');
+        if (r.id !== 'cibodas') assert.ok(s.shortId && s.detailId, s.id + ' has both languages');
+        assert.ok(Number.isFinite(s.lat) && Number.isFinite(s.lng), s.id + ' has coordinates');
+        if (i > 0) {
+          assert.ok(s.km > r.stops[i - 1].km, s.id + ' km ascends');
+          assert.equal(r.stops[i - 1].legToNext.climbM, s.elevM - r.stops[i - 1].elevM, s.id + ' leg climb');
+        }
+      });
+      assert.equal(r.stops[r.stops.length - 1].legToNext, null);
+    });
+  });
+  assert.equal(seen.size, T.ALL_STOPS.length);
+});
+
+test('the catalog view is the flat row the screen reads', () => {
+  const v = T.catalogView(T.DEST_BY_ID.semeru);
+  assert.equal(v.id, 'semeru');
+  assert.equal(v.island, 'jawa');
+  assert.equal(v.summitM, 3676);
+  assert.equal(v.difficulty, 'hard');
+  assert.ok(v.status.level);
+  assert.ok(v.figures);
+  const g = T.catalogView(T.DEST_BY_ID['gede-pangrango']);
+  assert.equal(g.category, 'gunung');
+  assert.equal(g.province, 'Jawa Barat');
 });

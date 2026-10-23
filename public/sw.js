@@ -5,7 +5,7 @@
  * fetched from the network, never files vendored into the repo), and never
  * touches /api/.
  */
-var CACHE = 'mt-shell-v6';
+var CACHE = 'mt-shell-v7';
 // Report photos saved by the explicit offline save (app.js). Only the page
 // writes here; this worker serves them when the network fails. Kept across
 // shell versions.
@@ -19,6 +19,7 @@ var PRECACHE = [
   '/packing.js',
   '/status.js',
   '/share-links.js',
+  '/catalog.js',
 ];
 
 self.addEventListener('install', function (event) {

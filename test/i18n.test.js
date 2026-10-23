@@ -39,7 +39,7 @@ test('placeholders match between the languages', function () {
 });
 
 test('every guide item is translated', function () {
-  M.STOPS.forEach(function (s) {
+  M.ALL_STOPS.forEach(function (s) {
     ['short', 'detail'].forEach(function (f) {
       var k = 'stop.' + s.id + '.' + f;
       assert.ok(ID[k], 'missing id string ' + k);
@@ -61,6 +61,13 @@ test('every guide item is translated', function () {
     assert.ok(EN[gk] === g.group, 'en mirror of ' + gk + ' drifted from packing.js');
     g.items.forEach(function (it) {
       ['label', 'note'].forEach(function (f) {
+        // A note that depends on the mountain comes from noteKey, so its
+        // dictionary string carries the placeholder rather than the source.
+        if (f === 'note' && it.noteKey) {
+          assert.ok(ID[it.noteKey], 'missing id string ' + it.noteKey);
+          assert.ok(EN[it.noteKey], 'missing en string ' + it.noteKey);
+          return;
+        }
         var k = 'pack.' + it.id + '.' + f;
         assert.ok(ID[k], 'missing id string ' + k);
         assert.ok(EN[k] === it[f], 'en mirror of ' + k + ' drifted from packing.js');
@@ -70,7 +77,7 @@ test('every guide item is translated', function () {
 });
 
 test('stop names are not in the dictionary', function () {
-  M.STOPS.forEach(function (s) {
+  M.ALL_STOPS.forEach(function (s) {
     assert.strictEqual(ID['stop.' + s.id + '.name'], undefined);
     assert.strictEqual(EN['stop.' + s.id + '.name'], undefined);
   });

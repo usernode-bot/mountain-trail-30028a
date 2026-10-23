@@ -1,11 +1,17 @@
 # Mountain Trail
 
-An offline trail guide and safety companion for hikers, built around Mount
-Gede Pangrango by the Cibodas route. The whole interface speaks Indonesian
-and English; the Location tab switches language. Four tabs along the
-bottom:
+An offline trail guide and safety companion for hikers, now covering a
+catalog of Indonesian mountains grouped by island, with Mount Gede
+Pangrango by the Cibodas route as the default. The whole interface speaks
+Indonesian and English; the Location tab switches language. Five tabs along
+the bottom:
 
-- **Trail** — the guide: the mountain header, the trail's current status
+- **Mountains** — every mountain in the guide, grouped by island from
+  Sumatra to Papua, with a search field, difficulty, height and open/closed
+  filters, a Popular strip, and the guides you have saved. Each row opens
+  that mountain's own guide. Heights, distances and times carry an
+  "Estimate, not a survey" label.
+- **Trail** — the open mountain's guide: the header, the trail's current status
   (open, open with limits, or closed, with the reason and how fresh the
   figure is), permits and daily quota with a link to the park's official
   SIMAKSI booking site, basecamp and summit weather with a three-day
@@ -19,12 +25,13 @@ bottom:
   A notifications section keeps you posted on status and weather changes if
   you follow the mountain.
 - **Report** — one tap on Slippery, Landslide, No water, Heavy fog, Wildlife,
-  Extreme weather or Fallen tree sends a condition report, with an optional
-  note (200 characters) and photo. Reports are shared with every hiker and
-  show for 24 hours; a "Still valid" tap from another hiker confirms the
-  report (the count shows; it does not extend the 24 hours). Made offline, they wait on the
-  phone and send when the signal is back. A report flagged by two people is
-  hidden; authors can remove their own.
+  Extreme weather or Fallen tree sends a condition report for the open
+  mountain, with an optional note (200 characters) and photo. Reports are
+  shared with every hiker and show for 24 hours; a "Still valid" tap from
+  another hiker confirms the report (the count shows; it does not extend the
+  24 hours). Made offline, they wait on the phone and send when the signal
+  is back. A report flagged by two people is hidden; authors can remove
+  their own.
 - **Packing** — a checklist that builds itself from the days on the mountain
   and the group size, and from the mountain itself (cold nights, frequent
   rain, water at Kandang Batu and Kandang Badak, all rubbish carried down).
@@ -48,7 +55,10 @@ translated in `public/i18n.js`.
 
 The guide is static content that ships with the app (`public/trail-data.js`),
 and a small service worker (`public/sw.js`) caches the app shell after one
-online visit, so the app opens with no connection. Reports go through the
+online visit, so every mountain's guide opens with no connection. Saving a
+mountain pins it in the Mountains tab and in the Saved filter; the saved
+list stays on the phone. Saving reports also keeps the open mountain's
+reports and photos for offline use. Reports go through the
 server; the checklist, last location, name and basecamp contact live only on
 the phone.
 

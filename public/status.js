@@ -93,6 +93,7 @@
     '/packing.js',
     '/status.js',
     '/share-links.js',
+    '/catalog.js',
   ];
 
   // The photo URLs an offline save should fetch: http(s) only, each once.

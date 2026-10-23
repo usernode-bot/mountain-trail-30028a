@@ -106,6 +106,55 @@
       "name": "Report tab demo offers the still-valid confirmation",
       "path": "/?demo=1#report",
       "expectText": "Still valid"
+    },
+    {
+      "name": "Mountains catalog opens with search",
+      "path": "/#mountains",
+      "expectText": "Mountains of Indonesia",
+      "expectSelector": "#mountain-search"
+    },
+    {
+      "name": "Catalog groups by island and carries the estimate label",
+      "path": "/#mountains",
+      "expectText": "Nusa Tenggara",
+      "expectSelector": "#catalog-results"
+    },
+    {
+      "name": "Catalog shows the estimate label",
+      "path": "/#mountains",
+      "expectText": "Estimate, not a survey"
+    },
+    {
+      "name": "A mountain opens its own guide",
+      "path": "/?mountain=semeru",
+      "expectText": "Ranu Pane route to Mahameru",
+      "expectSelector": "#trail-line"
+    },
+    {
+      "name": "A mountain guide offers saving",
+      "path": "/?mountain=semeru",
+      "expectText": "Save guide",
+      "expectSelector": "#guide-save"
+    },
+    {
+      "id": "catalog.demo",
+      "name": "Populated catalog demo",
+      "path": "/?demo=1#mountains",
+      "expectText": "Staging demo",
+      "expectSelector": "#catalog-results",
+      "visual": true,
+      "impact": [
+        "public/**",
+        "server.js",
+        "styles/**",
+        "tailwind.config.js"
+      ]
+    },
+    {
+      "name": "Demo mountain shows its own reports",
+      "path": "/?demo=1&mountain=semeru",
+      "expectText": "Heavy fog at Ranu Kumbolo",
+      "expectSelector": "#status-strip"
     }
   ]
 }

@@ -19,9 +19,24 @@
     var overnight = nights > 0;
     var n = people;
 
+    // The two parts of the list that belong to the mountain, not the trip:
+    // its approximate night temperature and the water stops marked on its
+    // route. Without them the Gede figures keep the old output.
+    var mtn = opts.mountain || {};
+    var temp = Number.isFinite(mtn.nightTempC) ? mtn.nightTempC : 5;
+    var stops = Array.isArray(mtn.waterStops) ? mtn.waterStops.filter(Boolean) : ['Kandang Batu', 'Kandang Badak'];
+    var waterNoteKey = stops.length === 0 ? 'pack.water.none'
+      : (stops.length > 3 ? 'pack.water.many' : 'pack.water.note');
+    var waterNoteVars = stops.length > 0 && stops.length <= 3 ? { stops: stops.join(', ') } : {};
+    var waterNote = waterNoteKey === 'pack.water.none'
+      ? '2 L each; no reliable source on this route, carry all you need'
+      : (waterNoteKey === 'pack.water.many'
+        ? '2 L each; refill at the water sources marked on the trail line'
+        : '2 L each; refill at ' + stops.join(', '));
+
     var shared = [
       { id: 'permit', label: 'Climbing permit (SIMAKSI)', note: 'Booked ahead; ID copies for each person', qty: 1 },
-      { id: 'tent', label: 'Tent for 2', note: 'Nights near 5 °C above 2,000 m', qty: Math.ceil(n / 2) },
+      { id: 'tent', label: 'Tent for 2', note: 'Nights near ' + temp + ' °C', noteKey: 'pack.nights.note', noteVars: { temp: temp }, qty: Math.ceil(n / 2) },
       { id: 'stove', label: 'Stove and pot set', note: 'One cooks for the group', qty: Math.ceil(n / 4) },
       { id: 'gas', label: 'Gas canister', note: 'Cooking and hot drinks', qty: Math.max(1, Math.ceil(n * nights / 4)) },
       { id: 'first-aid', label: 'First aid kit', note: 'Blister plasters and painkillers at least', qty: 1 },
@@ -30,19 +45,19 @@
     ];
     var each = [
       { id: 'rain-jacket', label: 'Rain jacket', note: 'Rain most afternoons', qty: n },
-      { id: 'warm-jacket', label: 'Warm jacket', note: 'Nights near 5 °C', qty: n },
-      { id: 'gloves', label: 'Gloves and beanie', note: 'Cold on the crater rim', qty: n },
+      { id: 'warm-jacket', label: 'Warm jacket', note: 'Nights near ' + temp + ' °C', noteKey: 'pack.nights.note', noteVars: { temp: temp }, qty: n },
+      { id: 'gloves', label: 'Gloves and beanie', note: 'Cold near the summit', qty: n },
       { id: 'headlamp', label: 'Headlamp and spare batteries', note: 'Summit starts before dawn', qty: n },
       { id: 'shoes', label: 'Shoes with grip', note: 'Wet rock and roots', qty: n },
       { id: 'whistle', label: 'Whistle', note: 'Three blasts for help', qty: n },
       { id: 'power-bank', label: 'Power bank', note: 'No charging on the mountain', qty: n },
       { id: 'medicines', label: 'Personal medicines', note: 'Own prescription and blister care', qty: n },
-      { id: 'sleeping-bag', label: 'Sleeping bag (5 °C)', note: 'Nights near 5 °C', qty: n },
+      { id: 'sleeping-bag', label: 'Sleeping bag', note: 'Nights near ' + temp + ' °C', noteKey: 'pack.nights.note', noteVars: { temp: temp }, qty: n },
       { id: 'sleeping-mat', label: 'Sleeping mat', note: 'Ground is cold and damp', qty: n },
       { id: 'dry-clothes', label: 'Dry clothes in a plastic bag', note: 'Dry layer for camp', qty: n },
     ];
     var food = [
-      { id: 'water', label: 'Water', unit: 'L', note: '2 L each; refill at Kandang Batu and Kandang Badak', qty: 2 * n },
+      { id: 'water', label: 'Water', unit: 'L', note: waterNote, noteKey: waterNoteKey, noteVars: waterNoteVars, qty: 2 * n },
       { id: 'meals', label: 'Meals', note: 'Three a day, minus the first breakfast and the last dinner', qty: n * (days === 1 ? 1 : 3 * days - 2) },
       { id: 'snacks', label: 'Trail snacks', note: 'Two a day while walking', qty: 2 * n * days },
       { id: 'spare-meal', label: 'Spare meal', note: 'One extra each, in case of a cold night', qty: n },

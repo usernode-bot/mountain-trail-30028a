@@ -11,12 +11,14 @@
   'use strict';
 
   var M = window.MT_TRAIL;
+  var CAT = window.MT_CATALOG;
   var P = window.MT_PACKING;
   var S = window.MT_SHARE;
   var I18N = window.MT_I18N;
   var ST = window.MT_STATUS;
   var MOUNTAIN = M.MOUNTAIN;
   var STOPS = M.STOPS;
+  var currentDestId = M.DEFAULT_DESTINATION_ID;
   var STOP_BY_ID = M.STOP_BY_ID;
   var MIN_FROM_BASECAMP = M.MIN_FROM_BASECAMP;
   var COND_BY_ID = M.COND_BY_ID;
@@ -69,6 +71,7 @@
     bukit: '<path d="M2 19c3-7 7-9 10-9s7 2 10 9z"/>',
     lembah: '<path d="M2 5c2 8 5 11 10 11s8-3 10-11"/><path d="M7 20c2-1 3 1 5 0s3 1 5 0"/>',
     junction: '<path d="M12 21v-8"/><path d="M12 13L6 3"/><path d="M12 13l6-10"/>',
+    bookmark: '<path d="M6 3h12v18l-6-4-6 4z"/>',
   };
   function iconSvg(name, cls) {
     return '<svg class="' + cls + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[name] + '</svg>';
@@ -92,6 +95,7 @@
   function tn(key, n, vars) { return I18N.tn(LANG, key, n, vars); }
   function tx(key, english) { return I18N.tx(LANG, key, english); }
   function fmtNum(n) { return I18N.fmtNum(LANG, n); }
+  function numberOrNull(v) { return typeof v === 'number' && isFinite(v) ? v : null; }
   function fmtAgo(ms) { return I18N.ago(LANG, ms); }
   function condLabel(id) { return COND_BY_ID[id] ? tx('cond.' + id + '.label', COND_BY_ID[id].label) : id; }
   function levelLabel(level) { return t('banner.' + level); }
@@ -185,6 +189,18 @@
     var list = visibleReports().filter(function (r) { return r.stopId === stopId; });
     return list;
   }
+
+  // The reports on the open mountain's route only. Every reader that used
+  // to mean "all reports" now means this, so one mountain never shows
+  // another's conditions.
+  function routeReports() {
+    var ids = {};
+    STOPS.forEach(function (s) { ids[s.id] = true; });
+    return visibleReports().filter(function (r) { return ids[r.stopId]; });
+  }
+
+  // The catalog's filter state lives for the session only, never stored.
+  var catalogState = { q: '', difficulty: 'all', height: 'all', status: 'all', savedOnly: false };
 
   // ── Kit shims (the bridge or native kit may be missing on a plain run) ──
   function kitToast(msg) {
@@ -332,13 +348,14 @@
     if (packing) renderPacking();
     renderLocation();
     renderShareQueue();
+    renderCatalog();
     if (lastAction) showSentNote(lastAction);
     var status = $('loc-status');
     if (status) status.textContent = '';
   }
 
   // ── Tabs ───────────────────────────────────────────────────────────────
-  var TABS = ['trail', 'report', 'packing', 'location'];
+  var TABS = ['mountains', 'trail', 'report', 'packing', 'location'];
   function switchTab(name) {
     if (TABS.indexOf(name) < 0) name = 'trail';
     TABS.forEach(function (t) {
@@ -347,9 +364,14 @@
       btn.classList.toggle('tab-item-on', t === name);
       btn.setAttribute('aria-selected', t === name ? 'true' : 'false');
     });
-    if (location.hash !== '#' + name) {
-      try { history.replaceState(null, '', '#' + name); } catch (e) {}
+    var url = null;
+    try { url = new URL(location.href); } catch (e) {}
+    if (url && url.hash !== '#' + name) {
+      try { url.hash = '#' + name; history.replaceState(null, '', url.pathname + url.search + url.hash); } catch (e) {}
     }
+    if (name === 'mountains') document.title = t('catalog.title') + ' · Mountain Trail';
+    else if (name === 'trail') document.title = MOUNTAIN.name + ' · Mountain Trail';
+    if (name === 'mountains') renderCatalog();
     lsSet('tab', name);
   }
   function tabFromHash() {
@@ -361,13 +383,282 @@
     if (t) switchTab(t);
   });
 
+  // ── Mountains tab (the catalog) ────────────────────────────────────────
+  function catalogStatusFor(id, status) {
+    if (demo && id === M.DEFAULT_DESTINATION_ID) {
+      var o = lsGet('statusOverride', null);
+      if (o && ST.isStatusLevel(o.level)) {
+        return Object.assign({}, status, { level: o.level, reason: o.reason || null });
+      }
+    }
+    return status;
+  }
+
+  // The rows the catalog filters and groups. searchText is built here so
+  // the module itself stays language-free.
+  function catalogEntries() {
+    var saved = savedMountains();
+    return M.DESTINATIONS.map(function (d) {
+      var e = M.catalogView(d);
+      e.status = catalogStatusFor(e.id, e.status);
+      e.searchText = [e.name, e.province, t('island.' + e.island)].join(' ');
+      e.saved = saved.indexOf(e.id) >= 0;
+      return e;
+    });
+  }
+
+  function catalogActive() {
+    return !!(catalogState.q || catalogState.difficulty !== 'all' ||
+      catalogState.height !== 'all' || catalogState.status !== 'all' || catalogState.savedOnly);
+  }
+
+  function statusWord(level) {
+    return t('banner.' + level);
+  }
+
+  function statusDotClass(level) {
+    var tone = ST.statusTone(level);
+    return tone === 'danger' ? 'bg-danger' : (tone === 'warn' ? 'bg-warn' : 'bg-accent');
+  }
+  function statusTextClass(level) {
+    var tone = ST.statusTone(level);
+    return tone === 'danger' ? 'text-danger' : (tone === 'warn' ? 'text-warn' : 'text-accent');
+  }
+
+  function catalogRow(e) {
+    var level = e.status && e.status.level;
+    var dot = level ? '<span class="mr-1 inline-block h-2 w-2 rounded-full ' + statusDotClass(level) + '"></span>' : '';
+    var status = level ? '<span class="' + statusTextClass(level) + '">' + dot + esc(statusWord(level)) + '</span>' : '';
+    var bookmark = e.saved ? '<span class="ml-1 text-accent">' + iconSvg('bookmark', 'h-4 w-4') + '</span>' : '';
+    return '<li><button type="button" class="list-row w-full text-left" data-mountain="' + e.id + '"' +
+      (e.id === currentDestId ? ' aria-current="true"' : '') + '>' +
+      '<span class="stop-node text-muted">' + iconSvg(e.category, 'h-5 w-5') + '</span>' +
+      '<span class="min-w-0 flex-1"><span class="flex items-center text-body font-semibold">' + esc(e.name) + bookmark + '</span>' +
+      '<span class="mt-0.5 block text-small text-muted">' + esc(e.province) + ' · ' + fmtM(e.summitM) + ' m</span></span>' +
+      '<span class="ml-auto flex flex-none flex-col items-end gap-0.5 text-small">' +
+      '<span class="flex items-center">' + status + '</span>' +
+      '<span class="text-muted">' + esc(t('diff.' + e.difficulty)) + '</span></span>' +
+      '</button></li>';
+  }
+
+  function catalogChip(attr, value, label, on) {
+    return '<button type="button" class="chip' + (on ? ' chip-on' : '') + '" data-' + attr + '="' + value +
+      '" aria-pressed="' + on + '">' + esc(label) + '</button>';
+  }
+
+  function renderCatalogFilters() {
+    var el = $('catalog-filters');
+    if (!el) return;
+    var diffs = ['all'].concat(M.DIFFICULTIES);
+    var heights = ['all'].concat(CAT.HEIGHT_BANDS);
+    var statuses = ['all', 'open', 'limited', 'closed'];
+    function heightLabel(id) {
+      if (id === 'all') return t('type.all');
+      if (id === 'low') return t('catalog.height.low', { m: fmtM(2000) });
+      if (id === 'mid') return t('catalog.height.mid', { low: fmtM(2000), high: fmtM(2999) });
+      return t('catalog.height.high', { m: fmtM(3000) });
+    }
+    el.innerHTML =
+      '<p class="section-label mt-4">' + esc(t('catalog.filter.difficulty')) + '</p>' +
+      '<div class="chip-row">' + diffs.map(function (id) {
+        return catalogChip('cat-diff', id, id === 'all' ? t('type.all') : t('diff.' + id), catalogState.difficulty === id);
+      }).join('') + '</div>' +
+      '<p class="section-label">' + esc(t('catalog.filter.height')) + '</p>' +
+      '<div class="chip-row">' + heights.map(function (id) {
+        return catalogChip('cat-height', id, heightLabel(id), catalogState.height === id);
+      }).join('') + '</div>' +
+      '<p class="section-label">' + esc(t('catalog.filter.status')) + '</p>' +
+      '<div class="chip-row">' + statuses.map(function (id) {
+        return catalogChip('cat-status', id, id === 'all' ? t('type.all') : statusWord(id), catalogState.status === id);
+      }).join('') + '</div>';
+    Array.prototype.forEach.call(el.querySelectorAll('[data-cat-diff]'), function (btn) {
+      btn.addEventListener('click', function () {
+        catalogState.difficulty = btn.getAttribute('data-cat-diff');
+        renderCatalogResults();
+      });
+    });
+    Array.prototype.forEach.call(el.querySelectorAll('[data-cat-height]'), function (btn) {
+      btn.addEventListener('click', function () {
+        catalogState.height = btn.getAttribute('data-cat-height');
+        renderCatalogResults();
+      });
+    });
+    Array.prototype.forEach.call(el.querySelectorAll('[data-cat-status]'), function (btn) {
+      btn.addEventListener('click', function () {
+        catalogState.status = btn.getAttribute('data-cat-status');
+        renderCatalogResults();
+      });
+    });
+  }
+
+  function renderCatalogResults() {
+    var el = $('catalog-results');
+    if (!el) return;
+    renderCatalogFilters();
+    var savedEl = $('catalog-saved');
+    if (savedEl) {
+      savedEl.className = 'chip' + (catalogState.savedOnly ? ' chip-on' : '');
+      savedEl.setAttribute('aria-pressed', catalogState.savedOnly ? 'true' : 'false');
+      savedEl.innerHTML = iconSvg('bookmark', 'h-4 w-4') + esc(t('catalog.saved'));
+    }
+    var clear = $('catalog-clear');
+    if (clear) clear.hidden = !catalogActive();
+    var entries = catalogEntries();
+    var shown = CAT.filterEntries(entries, {
+      q: catalogState.q,
+      difficulty: catalogState.difficulty,
+      height: catalogState.height,
+      status: catalogState.status,
+      savedOnly: catalogState.savedOnly,
+      savedIds: savedMountains(),
+    });
+    var count = $('catalog-count');
+    var html = '';
+    if (!shown.length) {
+      if (count) count.textContent = '';
+      if (clear) clear.hidden = true;
+      html = '<div class="state-empty rounded-xl border border-line bg-surface">' +
+        '<p class="text-body font-semibold">' + esc(t('catalog.empty')) + '</p>' +
+        '<p class="text-small text-muted">' + esc(t('catalog.empty.sub')) + '</p>' +
+        '<button type="button" class="btn-secondary" data-cat-clear>' + esc(t('catalog.clear')) + '</button></div>';
+      el.innerHTML = html;
+      var b = el.querySelector('[data-cat-clear]');
+      if (b) b.addEventListener('click', clearCatalog);
+      return;
+    }
+    if (catalogActive()) {
+      if (count) count.textContent = tn('catalog.count', shown.length);
+    } else {
+      if (count) count.textContent = '';
+      var popular = CAT.popularEntries(entries, M.POPULAR);
+      if (popular.length) {
+        html += '<p class="section-label mt-5">' + esc(t('catalog.popular')) + '</p>' +
+          '<ul class="list">' + popular.map(catalogRow).join('') + '</ul>';
+      }
+      html += '<p class="section-label mt-6">' + esc(t('catalog.all')) + '</p>';
+    }
+    CAT.groupByIsland(shown, M.ISLANDS).forEach(function (g) {
+      html += '<h3 class="section-label mt-4">' + esc(t('island.' + g.island)) +
+        ' <span class="chip-count">' + g.entries.length + '</span></h3>' +
+        '<ul class="list">' + g.entries.map(catalogRow).join('') + '</ul>';
+    });
+    el.innerHTML = html;
+    Array.prototype.forEach.call(el.querySelectorAll('[data-mountain]'), function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-mountain');
+        selectMountain(id);
+        switchTab('trail');
+        window.scrollTo({ top: 0 });
+      });
+    });
+  }
+
+  function clearCatalog() {
+    catalogState = { q: '', difficulty: 'all', height: 'all', status: 'all', savedOnly: false };
+    var input = $('mountain-search');
+    if (input) input.value = '';
+    renderCatalogResults();
+  }
+
+  function renderCatalog() {
+    var input = $('mountain-search');
+    if (input) input.value = catalogState.q;
+    renderCatalogResults();
+  }
+
+  function wireCatalog() {
+    var input = $('mountain-search');
+    if (input) {
+      input.addEventListener('input', function () {
+        catalogState.q = input.value;
+        // Only the results are rebuilt, so the field keeps focus while typing.
+        renderCatalogResults();
+      });
+    }
+    var saved = $('catalog-saved');
+    if (saved) saved.addEventListener('click', function () {
+      catalogState.savedOnly = !catalogState.savedOnly;
+      renderCatalogResults();
+    });
+    var clear = $('catalog-clear');
+    if (clear) clear.addEventListener('click', clearCatalog);
+  }
+
+  // ── Selecting a mountain ───────────────────────────────────────────────
+  function updateMountainUrl(id) {
+    try {
+      var url = new URL(location.href);
+      url.searchParams.set('mountain', id);
+      history.replaceState(null, '', url.pathname + url.search + url.hash);
+    } catch (e) {}
+  }
+
+  function applyMountain(id) {
+    var d = M.DEST_BY_ID[id] || M.DEST_BY_ID[M.DEFAULT_DESTINATION_ID];
+    var route = d.routes[0];
+    currentDestId = d.id;
+    MOUNTAIN = M.mountainView(route);
+    STOPS = route.stops;
+  }
+
+  function selectMountain(id) {
+    if (!M.DEST_BY_ID[id]) return false;
+    applyMountain(id);
+    lsSet('mountain', id);
+    updateMountainUrl(id);
+    typeFilter = 'all';
+    expandedStop = null;
+    profileStop = null;
+    renderHeader();
+    renderPermits();
+    renderWeather();
+    renderReportsAndTrail();
+    restoreOfflinePack();
+    renderNotifs();
+    if (packing) renderPacking();
+    if (picker) { buildPicker(); renderPickerHint(); }
+    renderLocation();
+    renderCatalog();
+    return true;
+  }
+
+  function initialMountainId() {
+    var q = null;
+    try { q = new URLSearchParams(location.search).get('mountain'); } catch (e) {}
+    if (q && M.DEST_BY_ID[q]) return q;
+    var stored = lsGet('mountain', null);
+    return (stored && M.DEST_BY_ID[stored]) ? stored : M.DEFAULT_DESTINATION_ID;
+  }
+
+
   // ── Trail tab ──────────────────────────────────────────────────────────
+  function fmtHours(m) {
+    var min = m.hoursUpMin, max = m.hoursUpMax;
+    if (Number.isFinite(min) && Number.isFinite(max) && min !== max) {
+      return t('trail.hoursRange', { min: min, max: max });
+    }
+    return t('trail.hoursOne', { h: Number.isFinite(max) ? max : (min || 1) });
+  }
+  function savedMountains() { return lsGet('savedMountains', []); }
+  function isSaved(id) { return savedMountains().indexOf(id) >= 0; }
+  function renderGuideSave() {
+    var btn = $('guide-save');
+    if (!btn) return;
+    var saved = isSaved(MOUNTAIN.id);
+    btn.setAttribute('aria-pressed', saved ? 'true' : 'false');
+    btn.innerHTML = iconSvg(saved ? 'check' : 'bookmark', 'h-5 w-5') +
+      esc(t(saved ? 'trail.savedGuide' : 'trail.saveGuide'));
+  }
   function renderHeader() {
-    $('mtn-route').textContent = t('trail.route', {
+    $('mtn-name').textContent = MOUNTAIN.name;
+    document.title = MOUNTAIN.name + ' · Mountain Trail';
+    $('mtn-route').textContent = t('trail.routeNamed', {
+      route: MOUNTAIN.routeName,
+      peak: MOUNTAIN.summitName,
       elev: fmtM(MOUNTAIN.summitM),
       km: fmtKm(MOUNTAIN.lengthKm),
       climb: fmtM(MOUNTAIN.climbM),
-      hours: t('trail.hours'),
+      hours: fmtHours(MOUNTAIN),
     });
     // The route's difficulty, on its own short line above the category.
     // A route without a known rating shows no line at all.
@@ -389,6 +680,16 @@
     // The category belongs to the mountain, so it shows once, here.
     var cat = $('mtn-category');
     if (cat) cat.innerHTML = '<span>' + iconSvg(MOUNTAIN.category, 'h-4 w-4') + esc(t('ls.' + MOUNTAIN.category)) + '</span>';
+    var place = $('mtn-place');
+    if (place) place.innerHTML = '<span>' + iconSvg('pin', 'h-4 w-4') +
+      esc(t('trail.place', { island: t('island.' + MOUNTAIN.island), province: MOUNTAIN.province })) + '</span>';
+    var est = $('mtn-estimate');
+    if (est) {
+      var unverified = MOUNTAIN.figures && MOUNTAIN.figures.verified === false;
+      est.hidden = !unverified;
+      est.innerHTML = unverified ? '<span class="badge">' + esc(t('approx.label')) + '</span>' : '';
+    }
+    renderGuideSave();
     var line = $('offline-line');
     if (!navigator.onLine && usingCache) {
       line.hidden = false;
@@ -413,7 +714,7 @@
     // can be seen; the plain route keeps the shipped "open".
     function shownStatus() {
       var s = MOUNTAIN.status || { level: 'open', reason: null, updatedAt: null, verified: true };
-      if (demo) {
+      if (demo && MOUNTAIN.id === M.DEFAULT_DESTINATION_ID) {
         var o = lsGet('statusOverride', null);
         if (o && ST.isStatusLevel(o.level)) {
           return { level: o.level, reason: o.reason || null, updatedAt: s.updatedAt, checkedAt: s.checkedAt, verified: s.verified };
@@ -461,18 +762,34 @@
     }
     function renderPermits() {
       var el = $('permits-card');
+      var section = $('permits-section');
       var p = MOUNTAIN.permits;
-      if (!p) { el.innerHTML = ''; return; }
-      var titleKey = p.booking === 'online' ? 'permits.onlineTitle'
-        : (p.booking === 'onsite' ? 'permits.onsiteTitle' : 'permits.noneTitle');
+      if (!p) {
+        if (section) section.hidden = true;
+        el.innerHTML = '';
+        return;
+      }
+      if (section) section.hidden = false;
+      var unknown = p.booking === 'unknown';
+      var titleKey = unknown ? 'permits.unknownTitle'
+        : (p.booking === 'online' ? 'permits.onlineTitle'
+          : (p.booking === 'onsite' ? 'permits.onsiteTitle' : 'permits.noneTitle'));
       var reqs = (p.requirements || []).map(function (r) { return esc(t('req.' + r)); });
       if (p.minGroupSize) reqs.push(esc(t('permits.minGroup', { n: p.minGroupSize })));
+      var rows = '';
+      if (numberOrNull(p.quotaDaily) !== null) {
+        rows += kvRow(esc(t('permits.quota')), esc(t('permits.quotaValue', { n: fmtNum(p.quotaDaily) })));
+      } else if (unknown) {
+        rows += kvRow(esc(t('permits.quota')), '<span class="text-muted">' + esc(t('permits.unknownValue')) + '</span>');
+      }
+      if (numberOrNull(p.feeWeekdayIdr) !== null && numberOrNull(p.feeWeekendIdr) !== null) {
+        rows += kvRow(esc(t('permits.fee')), esc(t('permits.feeValue', { wd: fmtNum(p.feeWeekdayIdr), we: fmtNum(p.feeWeekendIdr) })));
+      } else if (unknown) {
+        rows += kvRow(esc(t('permits.fee')), '<span class="text-muted">' + esc(t('permits.unknownValue')) + '</span>');
+      }
+      if (reqs.length) rows += kvRow(esc(t('permits.reqs')), reqs.join(', '));
       var html = '<p class="text-body font-semibold">' + esc(t(titleKey)) + '</p>' +
-        '<div class="mt-1 divide-y divide-line">' +
-        kvRow(esc(t('permits.quota')), esc(t('permits.quotaValue', { n: fmtNum(p.quotaDaily) }))) +
-        kvRow(esc(t('permits.fee')), esc(t('permits.feeValue', { wd: fmtNum(p.feeWeekdayIdr), we: fmtNum(p.feeWeekendIdr) }))) +
-        kvRow(esc(t('permits.reqs')), reqs.join(', ')) +
-        '</div>';
+        '<div class="mt-1 divide-y divide-line">' + rows + '</div>';
       if (p.booking === 'online' && p.bookingUrl) {
         html += '<a class="btn-secondary mt-3 w-full" href="' + esc(p.bookingUrl) + '" target="_blank" rel="noopener">' + esc(t('permits.openSite')) + '</a>';
       }
@@ -497,8 +814,14 @@
     }
     function renderWeather() {
       var el = $('weather-card');
+      var section = $('weather-section');
       var w = MOUNTAIN.weather;
-      if (!w || !Array.isArray(w.days)) { el.innerHTML = ''; return; }
+      if (!w || !Array.isArray(w.days)) {
+        if (section) section.hidden = true;
+        el.innerHTML = '';
+        return;
+      }
+      if (section) section.hidden = false;
       var climbDate = lsGet('climbDate', null);
       var now = nowDate();
       var warnings = ST.weatherWarnings(w, climbDate, now, (packing && packing.days) || 1);
@@ -553,7 +876,9 @@
     function checkForNotifs() {
       var follows = lsGet('follows', []);
       if (follows.indexOf(MOUNTAIN.id) < 0) return;
-      var seen = lsGet('seen', null);
+      var seenAll = lsGet('seen', {}) || {};
+      // Older builds stored one flat snapshot; it belongs to Gede.
+      var seen = seenAll[MOUNTAIN.id] || (MOUNTAIN.id === M.DEFAULT_DESTINATION_ID && seenAll.statusSig ? seenAll : null);
       var now = nowDate();
       var entries = [];
       if (seen) {
@@ -563,12 +888,12 @@
         if (seen.quotaSig !== quotaSig()) entries.push({ key: 'notif.quotaChanged' });
         var warned = ST.weatherWarnings(MOUNTAIN.weather, lsGet('climbDate', null), now, (packing && packing.days) || 1).length > 0;
         if (seen.weatherSig !== weatherSig() && warned) entries.push({ key: 'notif.weatherWarning' });
-        var rn = 'n:' + visibleReports().length;
+        var rn = 'n:' + routeReports().length;
         // A 'seed' snapshot is the baseline the demo seeds to; it starts
         // counting from there instead of announcing everything as new.
         if (seen.reportsSig && seen.reportsSig !== 'seed' && seen.reportsSig !== rn) {
           var prev = Number(String(seen.reportsSig).slice(2)) || 0;
-          var added = Math.max(1, (visibleReports().length - prev));
+          var added = Math.max(1, (routeReports().length - prev));
           entries.push(added === 1 ? { key: 'notif.newReportsOne' } : { key: 'notif.newReportsMany', params: { n: added } });
         }
         if (seen.reportsSig === 'seed') seen.reportsSig = rn;
@@ -577,10 +902,14 @@
       entries.forEach(function (e) {
         var dedupe = e.key + ':' + JSON.stringify(e.params || {});
         var exists = notifs.some(function (n) { return n.key + ':' + JSON.stringify(n.params || {}) === dedupe; });
-        if (!exists) notifs.unshift({ key: e.key, params: e.params || {}, at: now.toISOString(), read: false });
+        if (!exists) notifs.unshift({ key: e.key, params: e.params || {}, destId: MOUNTAIN.id, at: now.toISOString(), read: false });
       });
       if (entries.length) lsSet('notifs', notifs.slice(0, 10));
-      lsSet('seen', { statusSig: statusSig(), quotaSig: quotaSig(), weatherSig: weatherSig(), reportsSig: seen && seen.reportsSig ? seen.reportsSig : 'n:' + visibleReports().length });
+      seenAll[MOUNTAIN.id] = {
+        statusSig: statusSig(), quotaSig: quotaSig(), weatherSig: weatherSig(),
+        reportsSig: (seen && seen.reportsSig) ? seen.reportsSig : 'n:' + routeReports().length,
+      };
+      lsSet('seen', seenAll);
       renderNotifs();
     }
     // Notification text is re-translated at render; the level in a
@@ -593,8 +922,17 @@
     function renderNotifs() {
       var follows = lsGet('follows', []);
       var toggle = $('follow-toggle');
-      if (toggle) toggle.checked = follows.indexOf(MOUNTAIN.id) >= 0;
-      var notifs = lsGet('notifs', []);
+      if (toggle) {
+        toggle.checked = follows.indexOf(MOUNTAIN.id) >= 0;
+        toggle.setAttribute('aria-label', t('notif.follow', { name: MOUNTAIN.name }));
+      }
+      var label = $('notif-follow-label');
+      if (label) label.textContent = t('notif.follow', { name: MOUNTAIN.name });
+      // Only this mountain's notifications belong in its section. Entries
+      // from older builds have no destId and are Gede's.
+      var notifs = lsGet('notifs', []).filter(function (n) {
+        return n.destId ? n.destId === MOUNTAIN.id : MOUNTAIN.id === M.DEFAULT_DESTINATION_ID;
+      });
       var unread = notifs.filter(function (n) { return !n.read; }).length;
       var unreadEl = $('notif-unread');
       if (unread > 0) {
@@ -640,7 +978,7 @@
       $('status-retry').addEventListener('click', function () { loadReports(); });
       return;
     }
-    var list = visibleReports();
+    var list = routeReports();
     if (!list.length) {
       el.innerHTML = iconSvg('check', 'status-strip-icon') +
         '<div><p class="text-body font-medium">' + esc(t('strip.none')) + '</p>' +
@@ -729,7 +1067,7 @@
     function px(km) { return x0 + (km / kmMax) * (x1 - x0); }
     function py(e) { return yBot - ((e - eMin) / (eMax - eMin)) * (yBot - yTop); }
     var cond = {};
-    visibleReports().forEach(function (r) {
+    routeReports().forEach(function (r) {
       if (!cond[r.stopId]) cond[r.stopId] = r; // list is newest first
     });
     var pts = STOPS.map(function (s) { return px(s.km).toFixed(1) + ',' + py(s.elevM).toFixed(1); }).join(' ');
@@ -930,7 +1268,8 @@
   // ── Report tab ─────────────────────────────────────────────────────────
   var picker = null;
   function setPicker(stopId) {
-    if (STOP_BY_ID[stopId]) picker.value = stopId;
+    var inRoute = STOPS.some(function (s) { return s.id === stopId; });
+    if (inRoute) picker.value = stopId;
     renderPickerHint();
     lsSet('lastStop', picker.value);
   }
@@ -939,23 +1278,26 @@
     var s = STOP_BY_ID[picker.value];
     var hint = '';
     if (loc) {
-      var n = M.nearestStop(loc.lat, loc.lng);
+      var n = M.nearestStop(loc.lat, loc.lng, MOUNTAIN.routeId);
       hint = n.stop.id === s.id
         ? t('pick.closest', { ago: I18N.ago(LANG, nowDate().getTime() - new Date(loc.at).getTime()) })
         : t('pick.near', { name: n.stop.name });
-    } else if (lsGet('lastStop', null) && STOP_BY_ID[lsGet('lastStop', null)]) {
+    } else if (lsGet('lastStop', null) && STOPS.some(function (x) { return x.id === lsGet('lastStop', null); })) {
       hint = t('pick.last');
     } else {
       hint = t('pick.base');
     }
     $('picker-hint').textContent = hint;
   }
+  function inCurrentRoute(id) {
+    return STOPS.some(function (s) { return s.id === id; });
+  }
   function buildPicker() {
     var loc = lsGet('location', null);
     var initial = null;
-    if (loc) initial = M.nearestStop(loc.lat, loc.lng).stop.id;
+    if (loc) initial = M.nearestStop(loc.lat, loc.lng, MOUNTAIN.routeId).stop.id;
     if (!initial) initial = lsGet('lastStop', null);
-    if (!initial || !STOP_BY_ID[initial]) initial = STOPS[0].id;
+    if (!initial || !inCurrentRoute(initial)) initial = STOPS[0].id;
     picker.innerHTML = STOPS.map(function (s) {
       return '<option value="' + s.id + '">' + esc(s.name) + ', ' + fmtM(s.elevM) + ' m</option>';
     }).join('');
@@ -1429,7 +1771,7 @@
       el.textContent = '';
       return;
     }
-    var list = visibleReports();
+    var list = routeReports();
     if (!list.length) {
       ul.innerHTML = '<li class="state-empty"><p class="text-body font-medium">' + esc(t('reports.empty')) + '</p>' +
         '<p class="text-small text-muted">' + esc(t('reports.empty.sub')) + '</p></li>';
@@ -1497,7 +1839,15 @@
   function renderPacking() {
     $('days-value').textContent = String(packing.days);
     $('people-value').textContent = String(packing.people);
-    var groups = P.buildPackingList({ days: packing.days, people: packing.people });
+    var waterStops = STOPS.filter(function (s) { return s.kinds.indexOf('water') >= 0; }).map(function (s) { return s.name; });
+    var groups = P.buildPackingList({
+      days: packing.days,
+      people: packing.people,
+      mountain: {
+        nightTempC: MOUNTAIN.packing ? MOUNTAIN.packing.nightTempC : 5,
+        waterStops: waterStops,
+      },
+    });
     var packedSet = {};
     (packing.packed || []).forEach(function (id) { packedSet[id] = true; });
     var GROUP_KEY = {
@@ -1514,10 +1864,11 @@
         var isPacked = !!packedSet[it.id];
         if (isPacked) done++;
         var itLabel = tx('pack.' + it.id + '.label', it.label);
+        var itNote = it.noteKey ? t(it.noteKey, it.noteVars || {}) : tx('pack.' + it.id + '.note', it.note);
         html += '<li class="list-row' + (isPacked ? ' bg-raised/40' : '') + '">' +
           '<input type="checkbox" class="pack-box mt-0.5 h-5 w-5 flex-none accent-accent" data-pack="' + it.id + '"' + (isPacked ? ' checked' : '') + ' aria-label="' + esc(itLabel) + '">' +
           '<div class="min-w-0 flex-1"><p class="text-body' + (isPacked ? ' line-through decoration-line' : '') + '">' + esc(itLabel) + '</p>' +
-          '<p class="text-small text-muted">' + esc(tx('pack.' + it.id + '.note', it.note)) + '</p></div>' +
+          '<p class="text-small text-muted">' + esc(itNote) + '</p></div>' +
           '<span class="flex-none text-small text-muted">× ' + it.qty + (it.unit ? ' ' + it.unit : '') + '</span></li>';
       });
       html += '</ul>';
@@ -1576,7 +1927,7 @@
   var fixInFlight = false;
   var autoLocOn = false;
   function nearestLine(loc) {
-    var n = M.nearestStop(loc.lat, loc.lng);
+    var n = M.nearestStop(loc.lat, loc.lng, MOUNTAIN.routeId);
     var d = Math.round(n.meters / 10) * 10;
     if (n.meters > 2000) {
       return t('loc.far', { km: fmtKm(n.meters / 1000) });
@@ -1693,7 +2044,7 @@
     var name = ($('name-field').value || '').trim();
     var contact = ($('contact-field').value || '').trim();
     var parts = [];
-    parts.push(t('msg.who', { name: name || t('msg.hiker') }));
+    parts.push(t('msg.who', { name: name || t('msg.hiker'), mountain: MOUNTAIN.name, route: MOUNTAIN.routeName }));
     if (loc) {
       parts.push(t('msg.loc', {
         when: fmtWhen(loc.at),
@@ -1705,7 +2056,7 @@
     } else {
       parts.push(t('msg.noloc'));
     }
-    if (contact) parts.push(t('msg.contact', { contact: contact }));
+    if (contact) parts.push(t('msg.contact', { contact: contact, basecamp: STOPS[0].name }));
     parts.push(t('msg.emergency'));
     return parts.join(' ');
   }
@@ -1996,7 +2347,7 @@
 
   // ── Demo seeding (staging, ?demo=1) ────────────────────────────────────
   function seedDemo() {
-    if (lsGet('seeded', false)) return;
+    if (lsGet('seeded-v2', false)) return;
     lsSet('packing', { days: 2, people: 4, packed: ['permit', 'tent', 'stove', 'gas', 'first-aid', 'rain-jacket', 'headlamp', 'water', 'meals'] });
     var here = STOP_BY_ID['air-panas'];
     lsSet('location', {
@@ -2015,16 +2366,26 @@
     lsSet('statusOverride', { level: 'limited', reason: 'weather' });
     lsSet('follows', ['gede-pangrango']);
     lsSet('climbDate', dayKeyOffset(1));
+    // A few pinned guides so the Saved filter and the bookmarks show.
+    lsSet('savedMountains', ['semeru', 'rinjani', 'prau']);
     // Seeded notifications: one unread (the status change the override
-    // stands for) and one already read. The 'seen' snapshot carries
+    // stands for) and one already read. The Gede 'seen' snapshot carries
     // reportsSig 'seed' so the first real check counts from this baseline
     // instead of announcing every seeded report as new.
     lsSet('notifs', [
-      { key: 'notif.statusChanged', params: { level: 'limited' }, at: new Date(nowDate().getTime() - 30 * 60000).toISOString(), read: false },
-      { key: 'notif.newReportsOne', params: {}, at: new Date(nowDate().getTime() - 3 * 3600000).toISOString(), read: true },
+      { key: 'notif.statusChanged', params: { level: 'limited' }, destId: 'gede-pangrango', at: new Date(nowDate().getTime() - 30 * 60000).toISOString(), read: false },
+      { key: 'notif.newReportsOne', params: {}, destId: 'gede-pangrango', at: new Date(nowDate().getTime() - 3 * 3600000).toISOString(), read: true },
     ]);
-    lsSet('seen', { statusSig: statusSig(), quotaSig: quotaSig(), weatherSig: weatherSig(), reportsSig: 'seed' });
-    lsSet('seeded', true);
+    var g = M.mountainView(M.ROUTE_BY_ID.cibodas);
+    var seen = {};
+    seen['gede-pangrango'] = {
+      statusSig: 'limited:weather:' + g.status.updatedAt,
+      quotaSig: g.permits.quotaDaily + ':' + g.permits.checkedAt,
+      weatherSig: g.weather.updatedAt,
+      reportsSig: 'seed',
+    };
+    lsSet('seen', seen);
+    lsSet('seeded-v2', true);
   }
   // 'YYYY-MM-DD' for now's UTC day plus n days; the climb-date input's
   // format and status.js's day keys.
@@ -2091,9 +2452,53 @@
   }
 
   function restoreOfflinePack() {
-    packRecord = lsGet('offlinePack', null);
-    if (packRecord) packState = 'saved';
+    var rec = lsGet('offlinePack', null);
+    // A record without routeId is the old app's, which was Gede only.
+    var mine = rec && (rec.routeId ? rec.routeId === MOUNTAIN.routeId : MOUNTAIN.routeId === M.ROUTE_BY_ID.cibodas.id);
+    packRecord = mine ? rec : null;
+    packState = mine ? 'saved' : 'idle';
     renderOfflinePack();
+  }
+
+  // 'ok', 'worker' or 'files': the worker is ready and every shell file is
+  // really in its cache. Shared by the report save and the guide pin.
+  async function shellCacheState() {
+    if (swFailed || !('caches' in window) || !navigator.serviceWorker) return 'worker';
+    try {
+      await withTimeout(navigator.serviceWorker.ready, 20000);
+    } catch (e) {
+      return 'worker';
+    }
+    try {
+      var hits = await Promise.all(ST.SHELL_FILES.map(function (p) { return caches.match(p); }));
+      return hits.some(function (h) { return !h; }) ? 'files' : 'ok';
+    } catch (e) {
+      return 'worker';
+    }
+  }
+
+  // The guide travels with the app; saving it pins it in the catalog and
+  // confirms the shell really is cached. Nothing is sent.
+  async function toggleGuideSave() {
+    var id = MOUNTAIN.id;
+    var list = savedMountains();
+    var at = list.indexOf(id);
+    if (at >= 0) {
+      list.splice(at, 1);
+      lsSet('savedMountains', list);
+      renderGuideSave();
+      renderCatalog();
+      return;
+    }
+    var state = await shellCacheState();
+    if (state !== 'ok') {
+      kitToast(t('offline.err.' + state));
+      return;
+    }
+    list.push(id);
+    lsSet('savedMountains', list);
+    renderGuideSave();
+    renderCatalog();
   }
 
   // One photo into the photo cache; a failure counts as missed, never fails
@@ -2129,21 +2534,9 @@
       renderOfflinePack();
     }
 
-    // 1. The worker, and the storage it needs.
-    if (swFailed || !('caches' in window) || !navigator.serviceWorker) return fail('worker');
-    try {
-      await withTimeout(navigator.serviceWorker.ready, 20000);
-    } catch (e) {
-      return fail('worker');
-    }
-
-    // 2. Every shell file really is in the cache.
-    try {
-      var hits = await Promise.all(ST.SHELL_FILES.map(function (p) { return caches.match(p); }));
-      if (hits.some(function (h) { return !h; })) return fail('files');
-    } catch (e) {
-      return fail('worker');
-    }
+    // 1. The worker and every shell file, shared with Save guide.
+    var shell = await shellCacheState();
+    if (shell !== 'ok') return fail(shell);
 
     // 3. Today's reports: the one page-side fetch, and what fills the cache.
     await loadReports();
@@ -2152,7 +2545,7 @@
     if (!rec || !rec.at || rec.at < start) return fail('storage');
 
     // 4. Their photos. A photo that cannot be stored does not fail the save.
-    var list = visibleReports().filter(function (r) { return !r.pending; });
+    var list = routeReports().filter(function (r) { return !r.pending; });
     var urls = ST.packPhotoUrls(list);
     var dataPhotos = list.filter(function (r) {
       return typeof r.photoUrl === 'string' && /^data:/i.test(r.photoUrl);
@@ -2181,6 +2574,7 @@
     var savedAt = nowISO();
     lsSet('offlinePack', {
       savedAt: savedAt,
+      routeId: MOUNTAIN.routeId,
       reports: list.length,
       photos: dataPhotos + savedPhotos,
       photosMissed: missedPhotos,
@@ -2217,12 +2611,17 @@
     applyStaticText();
     renderLangButtons();
     wireLang();
+    // The mountain in the URL wins, then the last one opened, then Gede.
+    applyMountain(initialMountainId());
     picker = $('stop-picker');
     // The guide is part of the app, so it renders from trail-data at once,
     // before anything waits on the network: header, profile and all nine
     // stops now, skeleton bars only where the reports will land.
     renderReportsAndTrail();
     renderHeader(); // the header too, so it never shifts while reports load
+    renderPermits();
+    renderWeather();
+    renderCatalog();
     try {
       var me = await api('/api/me');
       if (me && me.ok && me.data) {
@@ -2233,14 +2632,24 @@
     if (demo) {
       $('demo-line').hidden = false;
       seedDemo();
+      // The demo keeps its own localStorage namespace; adopt its last
+      // mountain now that demo mode is known.
+      applyMountain(initialMountainId());
+      renderHeader();
+      renderReportsAndTrail();
+      renderCatalog();
     }
     packing = lsGet('packing', null) || { days: 2, people: 1, packed: [] };
     buildPicker();
     wirePacking();
+    wireCatalog();
+    var guideSave = $('guide-save');
+    if (guideSave) guideSave.addEventListener('click', toggleGuideSave);
     wireLocation();
     if (demo) seedDemoShare(); // after wireLocation fills the name and contact fields
     wirePhotoInput();
     wireNotifs();
+    renderNotifs();
     wireOfflinePack();
     renderPacking();
     renderPermits();
