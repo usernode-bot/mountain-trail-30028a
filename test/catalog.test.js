@@ -37,6 +37,22 @@ test('height bands break at 2,000 and 3,000 metres', () => {
   assert.equal(C.heightBand(undefined), null);
 });
 
+test('the island filter keeps only that island and composes', () => {
+  assert.deepEqual(C.filterEntries(ENTRIES, { island: 'jawa' }).map((e) => e.id), ['semeru', 'prau']);
+  assert.deepEqual(C.filterEntries(ENTRIES, { island: 'all' }).length, 4);
+  assert.deepEqual(C.filterEntries(ENTRIES, {}).length, 4);
+  assert.deepEqual(C.filterEntries(ENTRIES, { island: 'jawa', difficulty: 'hard' }).map((e) => e.id), ['semeru']);
+});
+
+test('difficulty tones are green, amber and red, and nothing else', () => {
+  assert.equal(C.difficultyTone('easy'), 'accent');
+  assert.equal(C.difficultyTone('moderate'), 'warn');
+  assert.equal(C.difficultyTone('hard'), 'danger');
+  assert.equal(C.difficultyTone('extreme'), null);
+  assert.equal(C.difficultyTone(null), null);
+  assert.equal(C.difficultyTone(undefined), null);
+});
+
 test('saved-only keeps the saved ids, in input order', () => {
   assert.deepEqual(
     C.filterEntries(ENTRIES, { savedOnly: true, savedIds: ['batur', 'semeru'] }).map((e) => e.id),
@@ -64,4 +80,26 @@ test('the real catalog filters to at least 40 rows and every island groups', () 
   assert.deepEqual(C.groupByIsland(all, T.ISLANDS).map((g) => g.island), T.ISLANDS);
   assert.equal(C.filterEntries(all, { q: 'semeru' })[0].id, 'semeru');
   assert.equal(C.filterEntries(all, { q: 'no such mountain' }).length, 0);
+});
+
+test('every catalog entry carries its estimated time up for the card', () => {
+  const v = T.catalogView(T.DEST_BY_ID.semeru);
+  assert.equal(v.hoursUpMin, 8);
+  assert.equal(v.hoursUpMax, 10);
+  T.DESTINATIONS.forEach((d) => {
+    const e = T.catalogView(d);
+    assert.ok(Number.isFinite(e.hoursUpMin) && Number.isFinite(e.hoursUpMax), d.id);
+  });
+});
+
+test('a card picture is the same every time and rises with the summit', () => {
+  const a = C.scenePaths({ id: 'semeru', summitM: 3676, category: 'gunung' });
+  assert.deepEqual(C.scenePaths({ id: 'semeru', summitM: 3676, category: 'gunung' }), a);
+  const low = C.scenePaths({ id: 'semeru', summitM: 900, category: 'gunung' });
+  assert.ok(a.peakY < low.peakY, 'a higher summit draws a taller peak');
+  assert.ok(a.peakY >= 0 && a.peakY < C.SCENE_H);
+  const hill = C.scenePaths({ id: 'semeru', summitM: 3676, category: 'bukit' });
+  assert.notEqual(hill.front, a.front, 'a hill is drawn rounded, not as a peak');
+  assert.match(hill.front, / C/);
+  assert.doesNotMatch(a.front, /NaN|undefined/);
 });

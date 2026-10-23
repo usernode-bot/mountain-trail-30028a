@@ -47,6 +47,17 @@
       "expectSelector": "#mtn-difficulty .diff-meter"
     },
     {
+      "name": "Estimate label opens an explanation and shows the data date",
+      "path": "/",
+      "expectText": "Data updated 15 Oct 2026",
+      "expectSelector": "#mtn-hero .est-info[data-est=route]"
+    },
+    {
+      "name": "Catalog estimate label has its info button",
+      "path": "/#mountains",
+      "expectSelector": "#catalog-estimate .est-info[data-est=catalog]"
+    },
+    {
       "name": "Profile stop labels",
       "path": "/",
       "expectText": "km 0, start"
@@ -145,6 +156,18 @@
       "name": "Catalog shows the estimate label",
       "path": "/#mountains",
       "expectText": "Perkiraan, bukan survei"
+    },
+    {
+      "name": "Catalog filters open from one Filter button",
+      "path": "/#mountains",
+      "expectText": "Filter",
+      "expectSelector": "#catalog-filters button"
+    },
+    {
+      "name": "Catalog shows mountain cards with a difficulty badge and a bookmark",
+      "path": "/#mountains",
+      "expectText": "Semeru",
+      "expectSelector": "#catalog-results .mtn-grid .mtn-card .diff-badge-hard"
     },
     {
       "name": "A mountain opens its own guide",

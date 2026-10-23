@@ -146,6 +146,14 @@
   // A weekday's name, 0 = Sunday as Date.getDay() counts.
   function weekday(lang, day) { return t(lang, 'weekday.' + day); }
 
+  // "15 Oct 2026" / "15 Okt 2026" for a data date. Read in UTC: the guide's
+  // dates are whole days, so the phone's zone never moves them.
+  function fmtDate(lang, iso) {
+    var d = new Date(iso);
+    if (!iso || !isFinite(d.getTime())) return '';
+    return d.getUTCDate() + ' ' + months(lang)[d.getUTCMonth()] + ' ' + d.getUTCFullYear();
+  }
+
   return {
     LANGS: LANGS,
     DEFAULT_LANG: DEFAULT_LANG,
@@ -160,5 +168,6 @@
     fmtKm: fmtKm,
     months: months,
     weekday: weekday,
+    fmtDate: fmtDate,
   };
 });
