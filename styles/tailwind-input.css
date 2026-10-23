@@ -398,6 +398,66 @@
     .mist-b { left: 54%; }
   }
 
+  /* The catalog's mountain cards: a drawn picture of the mountain under
+     the banner's sky, then the figures to compare at a glance on a soft
+     forest-green wash. A grid for the island groups, a sideways strip for
+     Popular. The bookmark is a separate button over the picture. */
+  .mtn-grid {
+    @apply mb-2 grid gap-3;
+    grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  }
+  .mtn-strip {
+    @apply -mx-4 mb-2 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pb-2;
+  }
+  .mtn-strip > .mtn-card { @apply w-40 flex-none snap-start; }
+  .mtn-card {
+    @apply relative flex flex-col overflow-hidden rounded-xl border border-line;
+    background:
+      linear-gradient(170deg, rgb(var(--surface)) 0%, rgb(var(--accent) / 0.07) 55%, rgb(var(--accent) / 0.16) 100%),
+      rgb(var(--surface));
+  }
+  .mtn-card-open {
+    @apply flex flex-1 flex-col text-left text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus;
+  }
+  .mtn-card-open[aria-current="true"] { box-shadow: inset 0 0 0 2px rgb(var(--accent)); border-radius: 0.75rem; }
+  .mtn-card-photo {
+    @apply relative block h-24 w-full overflow-hidden;
+    background:
+      radial-gradient(120% 110% at 85% 0%, rgb(var(--sky-glow) / 0.55), transparent 62%),
+      linear-gradient(165deg, rgb(var(--sky-1)) 0%, rgb(var(--sky-2)) 55%, rgb(var(--sky-3)) 100%);
+  }
+  .mtn-card-photo svg { @apply absolute inset-0 h-full w-full; }
+  .mtn-card-photo .ridge-front { opacity: 0.72; }
+  .mtn-card-body { @apply flex flex-1 flex-col gap-1 px-3 pb-3.5 pt-2.5; }
+  .mtn-card-name { @apply truncate font-display text-body font-semibold; }
+  .mtn-card-elev {
+    @apply font-display text-heading leading-6;
+    font-variant-numeric: tabular-nums;
+  }
+  .mtn-card-unit { @apply text-small font-medium text-muted; }
+  .mtn-card-place { @apply flex min-w-0 items-center gap-1 text-small text-muted; }
+  .mtn-card-tags { @apply mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-small; }
+  .mtn-card-status { @apply inline-flex items-center; }
+  .mtn-card-time { @apply mt-auto flex items-center gap-1 pt-1 text-small text-muted; }
+  /* Difficulty in its trail colour: green easy, amber moderate, red hard. */
+  .diff-badge { @apply inline-flex min-h-6 items-center rounded-full px-2 text-small font-semibold; }
+  .diff-badge-easy { @apply bg-accent text-on-accent; }
+  .diff-badge-moderate { @apply bg-warn text-on-warn; }
+  .diff-badge-hard { @apply bg-danger text-on-danger; }
+  .mtn-card-save {
+    @apply absolute right-1 top-1 inline-flex h-11 w-11 items-center justify-center rounded-full text-fg
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus;
+  }
+  .mtn-card-save::before {
+    content: '';
+    @apply absolute inset-1.5 rounded-full border;
+    background: rgb(var(--surface) / 0.82);
+    border-color: rgb(var(--line) / 0.85);
+  }
+  .mtn-card-save svg { position: relative; }
+  .mtn-card-save[aria-pressed="true"] { color: rgb(var(--accent)); }
+  .mtn-card-save[aria-pressed="true"] svg { fill: currentColor; }
+
   /* The same sky at less height, over the Report, Packing and Location
      tabs: a heading and one quiet ridge line under it. */
   .banner {

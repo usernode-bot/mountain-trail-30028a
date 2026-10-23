@@ -141,6 +141,12 @@
       "expectText": "Estimate, not a survey"
     },
     {
+      "name": "Catalog shows mountain cards with a difficulty badge and a bookmark",
+      "path": "/#mountains",
+      "expectText": "Semeru",
+      "expectSelector": "#catalog-results .mtn-grid .mtn-card .diff-badge-hard"
+    },
+    {
       "name": "A mountain opens its own guide",
       "path": "/?mountain=semeru",
       "expectText": "Ranu Pane route to Mahameru",

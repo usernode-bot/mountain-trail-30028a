@@ -65,3 +65,25 @@ test('the real catalog filters to at least 40 rows and every island groups', () 
   assert.equal(C.filterEntries(all, { q: 'semeru' })[0].id, 'semeru');
   assert.equal(C.filterEntries(all, { q: 'no such mountain' }).length, 0);
 });
+
+test('every catalog entry carries its estimated time up for the card', () => {
+  const v = T.catalogView(T.DEST_BY_ID.semeru);
+  assert.equal(v.hoursUpMin, 8);
+  assert.equal(v.hoursUpMax, 10);
+  T.DESTINATIONS.forEach((d) => {
+    const e = T.catalogView(d);
+    assert.ok(Number.isFinite(e.hoursUpMin) && Number.isFinite(e.hoursUpMax), d.id);
+  });
+});
+
+test('a card picture is the same every time and rises with the summit', () => {
+  const a = C.scenePaths({ id: 'semeru', summitM: 3676, category: 'gunung' });
+  assert.deepEqual(C.scenePaths({ id: 'semeru', summitM: 3676, category: 'gunung' }), a);
+  const low = C.scenePaths({ id: 'semeru', summitM: 900, category: 'gunung' });
+  assert.ok(a.peakY < low.peakY, 'a higher summit draws a taller peak');
+  assert.ok(a.peakY >= 0 && a.peakY < C.SCENE_H);
+  const hill = C.scenePaths({ id: 'semeru', summitM: 3676, category: 'bukit' });
+  assert.notEqual(hill.front, a.front, 'a hill is drawn rounded, not as a peak');
+  assert.match(hill.front, / C/);
+  assert.doesNotMatch(a.front, /NaN|undefined/);
+});

@@ -470,6 +470,8 @@
       category: destination.category,
       summitM: route.summitM,
       difficulty: route.difficulty || null,
+      hoursUpMin: route.hoursUpMin,
+      hoursUpMax: route.hoursUpMax,
       status: route.status || destination.status,
       figures: route.figures || null,
     };
