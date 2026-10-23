@@ -133,7 +133,10 @@
       <header>
         <h1 class="font-display text-title" data-i18n="catalog.title">Mountains of Indonesia</h1>
         <p class="mt-1 text-body text-muted" data-i18n="catalog.sub">Official routes across the islands, from Sumatra to Papua.</p>
-        <p class="mt-2 text-small text-muted"><span class="badge" data-i18n="approx.label">Estimate, not a survey</span> <span data-i18n="approx.catalog">Heights, distances and times are guide estimates.</span></p>
+        <p id="catalog-est" class="est-line mt-2">
+          <button type="button" class="est-info" aria-label="About these estimates" data-i18n-label="est.aria"></button>
+          <span><span data-i18n="approx.catalog">Heights, distances and times are guide estimates.</span> <span id="catalog-updated"></span></span>
+        </p>
       </header>
 
       <label for="mountain-search" class="mb-1.5 mt-4 block text-small font-medium" data-i18n="catalog.search">Search mountains</label>
@@ -182,7 +185,7 @@
           <span class="mist mist-a"></span>
           <span class="mist mist-b"></span>
         </div>
-        <p id="mtn-estimate" class="mt-2" hidden></p>
+        <p id="mtn-estimate" class="est-line est-line-hero" hidden></p>
       </header>
 
       <div class="mt-3">

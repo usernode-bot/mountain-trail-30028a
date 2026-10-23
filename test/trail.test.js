@@ -2,6 +2,12 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const T = require('../public/trail-data.js');
 
+test('the guide carries the date its figures were last checked', () => {
+  assert.ok(T.DATA_CHECKED_AT, 'DATA_CHECKED_AT is exported');
+  assert.ok(!isNaN(new Date(T.DATA_CHECKED_AT).getTime()), 'DATA_CHECKED_AT parses as a date');
+  assert.equal(T.MOUNTAIN.figures.checkedAt, T.DATA_CHECKED_AT);
+});
+
 test('stops climb in km and height, with the summit last', () => {
   const stops = T.STOPS;
   for (let i = 1; i < stops.length; i++) {

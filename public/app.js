@@ -75,6 +75,7 @@
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M4.9 4.9l1.4 1.4"/><path d="M17.7 17.7l1.4 1.4"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M4.9 19.1l1.4-1.4"/><path d="M17.7 6.3l1.4-1.4"/>',
     moon: '<path d="M20 15.5A8.5 8.5 0 0 1 8.5 4a8.5 8.5 0 1 0 11.5 11.5z"/>',
     contrast: '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" stroke="none"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle cx="12" cy="7.5" r="0.75" fill="currentColor" stroke="none"/>',
   };
   function iconSvg(name, cls) {
     return '<svg class="' + cls + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[name] + '</svg>';
@@ -292,14 +293,120 @@
     presentSheet(wrap);
     return Promise.resolve(null);
   }
-  function askForAccount() {
+  function askForAccount(actionKey) {
     try {
       if (window.usernode && typeof window.usernode.askForAccount === 'function') {
-        window.usernode.askForAccount({ action: t('account.report') });
+        window.usernode.askForAccount({ action: t(actionKey || 'account.report') });
         return;
       }
     } catch (e) {}
     kitToast(t('toast.account'));
+  }
+
+  // A guide date as "15 Oct 2026", in the hiker's month names. Read in UTC:
+  // the stored timestamp is midnight UTC, so a local-time read could show
+  // the day before west of Greenwich.
+  function fmtDay(iso) {
+    var d = new Date(iso);
+    if (!isFinite(d.getTime())) return '';
+    return d.getUTCDate() + ' ' + I18N.months(LANG)[d.getUTCMonth()] + ' ' + d.getUTCFullYear();
+  }
+
+  // ── The estimate info button and its sheet ────────────────────────────
+  // The badge that used to say "Estimate, not a survey" is now a round info
+  // button beside the date the guide was last updated. It opens a short
+  // explanation in the hiker's language, whose one action is the correction
+  // form. Corrections go to the guide's keepers only: no screen reads them
+  // back.
+  function openEstimateSheet(scope) {
+    scope = scope || { routeId: null };
+    var route = scope.routeId && M.ROUTE_BY_ID[scope.routeId];
+    var day = fmtDay((route && route.figures && route.figures.checkedAt) || M.DATA_CHECKED_AT);
+    var wrap = document.createElement('div');
+    wrap.className = 'flex flex-col gap-3 p-4';
+    var handle = presentSheet(wrap);
+
+    function showExplanation() {
+      wrap.innerHTML = '<p class="font-display text-heading">' + esc(t('approx.label')) + '</p>' +
+        '<p class="text-body">' + esc(t('est.body1')) + '</p>' +
+        '<p class="text-body">' + esc(t('est.body2')) + '</p>' +
+        '<p class="text-small text-muted">' + esc(t('est.lastUpdated', { date: day })) + '</p>' +
+        '<p class="text-small text-muted">' + esc(t('est.invite')) + '</p>' +
+        '<div class="flex justify-end gap-2">' +
+        '<button type="button" class="btn-secondary" data-close>' + esc(t('est.close')) + '</button>' +
+        '<button type="button" class="btn-primary" data-correct>' + esc(t('est.correct')) + '</button>' +
+        '</div>';
+      wrap.querySelector('[data-close]').addEventListener('click', function () { handle.dismiss(); });
+      wrap.querySelector('[data-correct]').addEventListener('click', function () {
+        if (!ME.user) { askForAccount('account.correction'); return; }
+        showForm();
+      });
+    }
+
+    function showForm() {
+      var clientId = uuid();
+      var sending = false;
+      wrap.innerHTML = '<p class="font-display text-heading">' + esc(t('corr.title')) + '</p>' +
+        '<p class="text-small text-muted">' + esc(scope.label || t('corr.general')) + '</p>' +
+        '<label for="corr-box" class="text-small font-medium">' + esc(t('corr.label')) + '</label>' +
+        '<textarea id="corr-box" class="field" rows="3" maxlength="500" placeholder="' + esc(t('corr.ph')) + '"></textarea>' +
+        '<p id="corr-count" class="text-small text-muted">' + esc(t('corr.count', { n: 0 })) + '</p>' +
+        '<p class="text-small text-muted">' + esc(t('corr.private')) + '</p>' +
+        '<p id="corr-msg" class="text-small text-muted" hidden></p>' +
+        '<div class="flex justify-end gap-2">' +
+        '<button type="button" class="btn-secondary" data-cancel>' + esc(t('cancel')) + '</button>' +
+        '<button type="button" class="btn-primary" data-send disabled>' + esc(t('corr.send')) + '</button>' +
+        '</div>';
+      var box = wrap.querySelector('#corr-box');
+      var count = wrap.querySelector('#corr-count');
+      var msg = wrap.querySelector('#corr-msg');
+      var send = wrap.querySelector('[data-send]');
+      function showMsg(text, danger) {
+        msg.hidden = false;
+        msg.className = 'text-small ' + (danger ? 'text-danger' : 'text-muted');
+        msg.textContent = text;
+      }
+      function upd() {
+        count.textContent = t('corr.count', { n: box.value.length });
+        send.disabled = sending || !box.value.trim();
+      }
+      box.addEventListener('input', upd);
+      wrap.querySelector('[data-cancel]').addEventListener('click', function () { showExplanation(); });
+      send.addEventListener('click', function () {
+        var text = box.value.trim();
+        if (!text || sending) return;
+        msg.hidden = true;
+        // Corrections are not queued: the form keeps the text so the hiker
+        // can send it once the signal is back.
+        if (!navigator.onLine) { showMsg(t('corr.offline'), false); return; }
+        sending = true;
+        send.disabled = true;
+        send.textContent = t('corr.sending');
+        api('/api/corrections', {
+          method: 'POST',
+          body: { clientId: clientId, routeId: scope.routeId || null, message: text },
+        }).then(function (res) {
+          if (res.ok) {
+            handle.dismiss();
+            kitToast(t('corr.thanks'));
+            return;
+          }
+          sending = false;
+          send.textContent = t('corr.send');
+          upd();
+          if (res.status === 401) { askForAccount('account.correction'); return; }
+          showMsg(t('corr.error'), true);
+        }).catch(function () {
+          sending = false;
+          send.textContent = t('corr.send');
+          upd();
+          showMsg(t('corr.error'), true);
+        });
+      });
+      try { box.focus(); } catch (e) {}
+    }
+
+    showExplanation();
   }
 
   // ── Language ───────────────────────────────────────────────────────────
@@ -596,9 +703,23 @@
     renderCatalogResults();
   }
 
+  // The catalog's estimate line: the info button and the date the guide was
+  // last updated. The button itself is in index.html and wired once; this
+  // refills its icon and date whenever the language changes.
+  function renderCatalogEstimate() {
+    var btn = document.querySelector('#catalog-est .est-info');
+    if (btn) {
+      btn.innerHTML = iconSvg('info', 'h-5 w-5');
+      btn.setAttribute('aria-label', t('est.aria'));
+    }
+    var updated = $('catalog-updated');
+    if (updated) updated.textContent = t('est.updated', { date: fmtDay(M.DATA_CHECKED_AT) });
+  }
+
   function renderCatalog() {
     var input = $('mountain-search');
     if (input) input.value = catalogState.q;
+    renderCatalogEstimate();
     renderCatalogResults();
   }
 
@@ -618,6 +739,10 @@
     });
     var clear = $('catalog-clear');
     if (clear) clear.addEventListener('click', clearCatalog);
+    var estBtn = document.querySelector('#catalog-est .est-info');
+    if (estBtn) estBtn.addEventListener('click', function () {
+      openEstimateSheet({ routeId: null });
+    });
   }
 
   // ── Selecting a mountain ───────────────────────────────────────────────
@@ -736,7 +861,20 @@
     if (est) {
       var unverified = MOUNTAIN.figures && MOUNTAIN.figures.verified === false;
       est.hidden = !unverified;
-      est.innerHTML = unverified ? '<span class="badge">' + esc(t('approx.label')) + '</span>' : '';
+      if (unverified) {
+        var checkedAt = MOUNTAIN.figures.checkedAt || M.DATA_CHECKED_AT;
+        est.innerHTML = '<button type="button" class="est-info" aria-label="' + esc(t('est.aria')) + '">' +
+          iconSvg('info', 'h-5 w-5') + '</button>' +
+          '<span>' + esc(t('est.hero', { date: fmtDay(checkedAt) })) + '</span>';
+        est.querySelector('.est-info').addEventListener('click', function () {
+          openEstimateSheet({
+            routeId: MOUNTAIN.routeId,
+            label: t('corr.for', { name: MOUNTAIN.name, route: MOUNTAIN.routeName }),
+          });
+        });
+      } else {
+        est.innerHTML = '';
+      }
     }
     renderGuideSave();
     // The route length, the second chip.

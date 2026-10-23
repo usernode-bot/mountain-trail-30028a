@@ -136,9 +136,16 @@
       "expectSelector": "#catalog-results"
     },
     {
-      "name": "Catalog shows the estimate label",
+      "name": "Catalog shows the estimate info button and date",
       "path": "/#mountains",
-      "expectText": "Estimate, not a survey"
+      "expectText": "Updated 15 Oct 2026",
+      "expectSelector": "#catalog-est .est-info"
+    },
+    {
+      "name": "Mountain banner shows the estimate info button",
+      "path": "/",
+      "expectText": "Guide estimates. Updated 15 Oct 2026.",
+      "expectSelector": "#mtn-hero #mtn-estimate .est-info"
     },
     {
       "name": "A mountain opens its own guide",

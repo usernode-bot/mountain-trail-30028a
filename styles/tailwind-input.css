@@ -242,6 +242,25 @@
     color: rgb(var(--muted));
   }
 
+  /* The estimate line: a round info button and the date the guide was last
+     updated. The catalog header and the foot of the mountain banner both
+     use it; over the sky it takes the banner's translucent surface. */
+  .est-line {
+    @apply flex items-center gap-2 text-small text-muted;
+  }
+  .est-line[hidden] { display: none; }
+  .est-line-hero {
+    @apply relative px-4 pb-2.5 text-fg;
+    z-index: 2;
+  }
+  .est-info {
+    @apply inline-flex h-11 w-11 flex-none items-center justify-center rounded-full border text-accent
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus;
+    background: rgb(var(--surface) / 0.78);
+    border-color: rgb(var(--line) / 0.85);
+  }
+  .est-info:hover { background: rgb(var(--surface) / 0.95); }
+
   /* The two-per-row grid the weather card uses for basecamp and summit. */
   .wx-grid {
     @apply grid grid-cols-2 gap-3;

@@ -116,7 +116,11 @@ Fallen tree) with one tap and an optional photo, confirm someone else's
 report as "Still valid" (a count, it does not extend the 24 hours), build
 a packing checklist from days, group size and the open mountain, and share
 their last location as a message for basecamp or family. Reports are shared
-through the server so the next hiker sees them. When a signed-in hiker
+through the server so the next hiker sees them. The "Estimate, not a survey"
+badge is a round info button beside the guide's last-updated date, in the
+catalog header and at the foot of the mountain banner: it opens a short
+explanation of how far to trust the figures, with a "Report a correction"
+form that sends a note to the guide's keepers only. When a signed-in hiker
 updates their location, a copy is sent to the server (queued offline and
 replayed on reconnect) into a private, append-only table that nothing in
 the app reads back; the phone keeps its own copy, and the checklist, name
@@ -160,7 +164,8 @@ request changes the look on purpose.
   cards pad 20 px and list rows 14 px.
 - **Icons:** one drawn line set, one stroke width. Basecamp (a hut), post
   (a signpost), water (a drop), camp (a tent), summit (a peak with a
-  flag), and one per condition: wet waves, a shedding slope, a crossed-out
+  flag), the info mark (a ringed "i") that opens the estimate explanation,
+  and one per condition: wet waves, a shedding slope, a crossed-out
   drop, stacked haze lines. Landscape types: two peaks (Mountain), one
   rounded hump (Hill), a U-shaped dip over a stream line (Valley), shown
   once beside the mountain's name.
@@ -244,6 +249,13 @@ Re-theme by changing the token values there, keeping every text pair at
   Indonesian and English, key parity asserted by test). Both are precached
   by the service worker like `trail-data.js`. New user-facing copy goes in
   `i18n.js`, never inline.
+- Corrections about the guide's figures (`POST /api/corrections`) live in
+  `data_corrections`, an append-only table marked `staging:private`:
+  `client_id` (a re-sent tap no-ops), the author from the verified token,
+  an optional `route_id` (null when sent from the catalog), a message of 1
+  to 500 characters trimmed by `lib/correction.js`, and `created_at`. No GET
+  route reads it and no screen shows it: only the guide's keepers read the
+  table. Corrections are never queued offline; the form keeps the text.
 - "Masih berlaku" confirmations live in `report_confirms`, a public
   append-only table like `report_flags`: one row per hiker per report (the
   primary key), a re-sent tap no-ops on its `client_id`. The count shows on

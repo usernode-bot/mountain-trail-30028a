@@ -152,8 +152,10 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 // the same file so a report can only name a real stop and a real condition.
 const trailData = require('./public/trail-data.js');
 const { parseLocation } = require('./lib/location.js');
+const { parseCorrection } = require('./lib/correction.js');
 const STOP_IDS = new Set(trailData.ALL_STOPS.map((s) => s.id));
 const CONDITION_IDS = new Set(trailData.CONDITIONS.map((c) => c.id));
+const ROUTE_IDS = new Set(Object.keys(trailData.ROUTE_BY_ID));
 
 // trail_reports, report_flags and report_confirms are public (staging copies
 // their rows): they carry Homeroom usernames, which are public, plus trail
@@ -212,6 +214,20 @@ async function migrate() {
     received_at TIMESTAMPTZ NOT NULL
   )`);
   await pool.query("COMMENT ON TABLE hiker_locations IS 'staging:private'");
+  // Corrections a hiker sends about the guide's own figures. Kept for the
+  // guide's keepers only: there is deliberately no GET route, and the table
+  // is excluded from the staging preview's data copy. Append-only, and a
+  // re-sent tap no-ops on its client_id.
+  await pool.query(`CREATE TABLE IF NOT EXISTS data_corrections (
+    id SERIAL PRIMARY KEY,
+    client_id TEXT UNIQUE NOT NULL,
+    user_id TEXT NOT NULL,
+    username TEXT NOT NULL,
+    route_id TEXT,
+    message TEXT NOT NULL CHECK (char_length(message) BETWEEN 1 AND 500),
+    created_at TIMESTAMPTZ NOT NULL
+  )`);
+  await pool.query("COMMENT ON TABLE data_corrections IS 'staging:private'");
 }
 
 function rowToReport(r) {
@@ -375,6 +391,28 @@ app.post('/api/locations', async (req, res) => {
   } catch (err) {
     console.warn('location insert failed: ' + err.message);
     res.status(500).json({ error: 'Could not save the location' });
+  }
+});
+
+// POST /api/corrections: a hiker says one of the guide's figures is wrong.
+// Stored for whoever looks after the guide; no route reads it back, so other
+// hikers never see it. Idempotent by client_id, like reports. Needs an
+// account, like every write, so the auth gate answers guests 401
+// account_required.
+app.post('/api/corrections', async (req, res) => {
+  const corr = parseCorrection(req.body, ROUTE_IDS);
+  if (!corr) return res.status(400).json({ error: 'Invalid correction' });
+  try {
+    await pool.query(
+      `INSERT INTO data_corrections (client_id, user_id, username, route_id, message, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (client_id) DO NOTHING`,
+      [corr.clientId, req.user.id, req.user.username, corr.routeId, corr.message, req.now]
+    );
+    res.status(201).json({ ok: true });
+  } catch (err) {
+    console.warn('correction insert failed: ' + err.message);
+    res.status(500).json({ error: 'Could not save the correction' });
   }
 });
 
