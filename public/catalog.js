@@ -15,6 +15,13 @@
   // 3,000 and above. Boundaries are inclusive at the bottom only.
   var HEIGHT_BANDS = ['low', 'mid', 'high'];
 
+  // The kit's colour tone for a route difficulty: green for easy, amber for
+  // moderate, red for hard. An unknown or missing rating has no badge.
+  var DIFFICULTY_TONES = { easy: 'accent', moderate: 'warn', hard: 'danger' };
+  function difficultyTone(d) {
+    return DIFFICULTY_TONES[d] || null;
+  }
+
   function heightBand(m) {
     if (!Number.isFinite(m)) return null;
     if (m < 2000) return 'low';
@@ -33,8 +40,8 @@
     return heightBand(entry.summitM) === band;
   }
 
-  // opts: { q, difficulty, height, status, savedOnly, savedIds }. Every
-  // filter is optional; 'all' or a missing value means no constraint.
+  // opts: { q, difficulty, height, island, status, savedOnly, savedIds }.
+  // Every filter is optional; 'all' or a missing value means no constraint.
   function filterEntries(entries, opts) {
     var o = opts || {};
     var q = String(o.q || '').trim().toLowerCase();
@@ -43,6 +50,7 @@
       if (!matchesQuery(e, q)) return false;
       if (o.difficulty && o.difficulty !== 'all' && e.difficulty !== o.difficulty) return false;
       if (o.height && o.height !== 'all' && !matchesHeight(e, o.height)) return false;
+      if (o.island && o.island !== 'all' && e.island !== o.island) return false;
       var level = e.status && e.status.level;
       if (o.status && o.status !== 'all' && level !== o.status) return false;
       if (o.savedOnly && saved.indexOf(e.id) < 0) return false;
@@ -119,6 +127,7 @@
     SCENE_H: SCENE_H,
     scenePaths: scenePaths,
     HEIGHT_BANDS: HEIGHT_BANDS,
+    difficultyTone: difficultyTone,
     heightBand: heightBand,
     filterEntries: filterEntries,
     groupByIsland: groupByIsland,

@@ -152,6 +152,8 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 // the same file so a report can only name a real stop and a real condition.
 const trailData = require('./public/trail-data.js');
 const { parseLocation } = require('./lib/location.js');
+const { parseCorrection } = require('./lib/correction.js');
+const ROUTE_IDS = new Set(Object.keys(trailData.ROUTE_BY_ID));
 const STOP_IDS = new Set(trailData.ALL_STOPS.map((s) => s.id));
 const CONDITION_IDS = new Set(trailData.CONDITIONS.map((c) => c.id));
 
@@ -212,6 +214,20 @@ async function migrate() {
     received_at TIMESTAMPTZ NOT NULL
   )`);
   await pool.query("COMMENT ON TABLE hiker_locations IS 'staging:private'");
+  // Hikers' corrections to the guide's estimated figures (request #45), read
+  // by whoever updates trail-data.js. Public like trail_reports: a public
+  // username, a route id and a note about a height, distance or time.
+  // Append-only; a re-sent tap no-ops on client_id. No GET route reads it.
+  await pool.query(`CREATE TABLE IF NOT EXISTS figure_corrections (
+    id SERIAL PRIMARY KEY,
+    client_id TEXT UNIQUE NOT NULL,
+    user_id TEXT NOT NULL,
+    username TEXT NOT NULL,
+    route_id TEXT,
+    field TEXT NOT NULL CHECK (field IN ('height','distance','time','difficulty','other')),
+    note TEXT NOT NULL CHECK (char_length(note) BETWEEN 1 AND 300),
+    created_at TIMESTAMPTZ NOT NULL
+  )`);
 }
 
 function rowToReport(r) {
@@ -375,6 +391,26 @@ app.post('/api/locations', async (req, res) => {
   } catch (err) {
     console.warn('location insert failed: ' + err.message);
     res.status(500).json({ error: 'Could not save the location' });
+  }
+});
+
+// POST /api/corrections: "Report a correction" on an estimate. Needs an
+// account like every write (the auth gate answers guests 401). Idempotent
+// by client_id, so a double tap stores one row.
+app.post('/api/corrections', async (req, res) => {
+  const c = parseCorrection(req.body, ROUTE_IDS);
+  if (!c) return res.status(400).json({ error: 'Invalid correction' });
+  try {
+    await pool.query(
+      `INSERT INTO figure_corrections (client_id, user_id, username, route_id, field, note, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (client_id) DO NOTHING`,
+      [c.clientId, String(req.user.id), req.user.username, c.routeId, c.field, c.note, req.now]
+    );
+    res.status(201).json({ ok: true });
+  } catch (err) {
+    console.warn('correction insert failed: ' + err.message);
+    res.status(500).json({ error: 'Could not save the correction' });
   }
 });
 
