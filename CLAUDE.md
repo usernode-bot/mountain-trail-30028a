@@ -97,21 +97,25 @@ tables you've marked private), etc.
 
 ## About Mountain Trail
 
-An offline trail guide and safety companion for hikers, built around one
-mountain: Gede Pangrango by the Cibodas route. The whole interface speaks
+An offline trail guide and safety companion for hikers, built around a
+national catalog of Indonesian mountains grouped by island, with Gede
+Pangrango by the Cibodas route as the default destination. The Mountains
+tab lists every mountain with search, difficulty, height and status
+filters, a Popular strip and saved guides; tapping one opens its own copy
+of the existing guide (Trail, Report, Packing, Location) with the same
+status, permits, weather, stops and reports. The whole interface speaks
 Indonesian and English (`public/i18n.js`; a header pill switches, the
-choice is remembered on the phone). The guide (posts, water sources, camps,
-the trail line) ships with the app as static content in
-`public/trail-data.js`, which also carries the curated trail status
-(open / open with limits / closed, with a reason), permits and daily quota
-with the official SIMAKSI booking link, and a 3-day basecamp and summit
-forecast — every block timestamped and marked "not verified" until a person
-confirms it, because the platform offers no live source. Hikers report
-current trail conditions (Slippery, Landslide, No water, Heavy fog,
-Wildlife, Extreme weather, Fallen tree) with one tap and an optional photo,
-confirm someone else's report as "Still valid" (a count, it does not extend
-the 24 hours), build a packing checklist from days and group size, and share their
-last location as a message for basecamp or family. Reports are shared
+choice is remembered on the phone). The guide ships with the app as static
+content in `public/trail-data.js`, which also carries each route's curated
+status, permits and quota, and Gede's 3-day forecast, every block
+timestamped and marked "not verified" until a person confirms it, because
+the platform offers no live source. Every route's figures carry an
+"Estimate, not a survey" label. Hikers report current trail conditions
+(Slippery, Landslide, No water, Heavy fog, Wildlife, Extreme weather,
+Fallen tree) with one tap and an optional photo, confirm someone else's
+report as "Still valid" (a count, it does not extend the 24 hours), build
+a packing checklist from days, group size and the open mountain, and share
+their last location as a message for basecamp or family. Reports are shared
 through the server so the next hiker sees them. When a signed-in hiker
 updates their location, a copy is sent to the server (queued offline and
 replayed on reconnect) into a private, append-only table that nothing in
@@ -254,16 +258,21 @@ Re-theme by changing the token values there, keeping every text pair at
 - The guide is three levels deep (request #30): destination (a mountain,
   hill or valley) > route > stop. `public/trail-data.js` declares
   `DESTINATIONS` (each with `category`, one of `LANDSCAPES` = `gunung` /
-  `bukit` / `lembah`, plus province, peaks, status and permits), each with
-  `routes` (figures, weather, optional own status/permits, `stops`). The
-  category lives on the destination only; stops carry no category, only
-  their `kinds` (basecamp, post, water, camp, junction, summit). Stop ids are
-  unique across every route because reports store a bare `stop_id`; never
-  rename the Cibodas ids. `MOUNTAIN` and `STOPS` are views of the default
-  route (`mountainView`), so the screens and `server.js` read one shape;
-  the server validates reports against `ALL_STOPS`. Gede Pangrango by
-  Cibodas is the only destination: a destination list, route picker and
-  more mountains are later stages of #30, still to be approved.
+  `bukit` / `lembah`, plus `island`, province, peaks, status and permits),
+  each with `routes` (figures, weather, optional own status/permits,
+  `stops`). `ISLANDS` is the catalog's display order and `POPULAR` its
+  eight named mountains. The category lives on the destination only; stops
+  carry no category, only their `kinds` (basecamp, post, water, camp,
+  junction, summit). Stop ids are unique across every route because reports
+  store a bare `stop_id`; never rename the Cibodas ids, and new routes use
+  the `<route-id>-<slug>` prefix. `MOUNTAIN` and `STOPS` are views of the
+  default route (`mountainView`), so the screens and `server.js` read one
+  shape; the server validates reports against `ALL_STOPS`.
+- The Mountains tab (`public/catalog.js`) filters and groups by island.
+  The selected mountain lives in `mt:mountain` and `?mountain=<id>`; its
+  four guide tabs read the same data as Gede Pangrango. Saved guides live
+  in `mt:savedMountains` on the phone only. Reports, the nearest stop and
+  the packing notes are scoped to the open route.
 - The Trail tab's chips filter stops by type (`STOP_TYPES`: Post, Water,
   Camp, Junction, plus All), each counting stops on the route. The filter
   starts at All on every visit and is never stored; while filtered, leg

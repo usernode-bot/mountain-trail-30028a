@@ -20,6 +20,7 @@ var PRECACHE = [
   '/packing.js',
   '/status.js',
   '/share-links.js',
+  '/catalog.js',
 ];
 
 self.addEventListener('install', function (event) {

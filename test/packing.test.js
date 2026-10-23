@@ -45,3 +45,30 @@ test('the list comes in three groups', () => {
   const list = buildPackingList({ days: 2, people: 2 });
   assert.deepEqual(list.map((g) => g.group), ['Shared by the group', 'Each person', 'Food and water']);
 });
+
+test('the mountain feeds the night temperature and the water notes', () => {
+  const list = buildPackingList({
+    days: 3,
+    people: 2,
+    mountain: { nightTempC: -2, waterStops: ['Ranu Kumbolo', 'Kalimati'] },
+  });
+  const items = {};
+  list.forEach((g) => g.items.forEach((it) => { items[it.id] = it; }));
+  assert.equal(items.tent.noteVars.temp, -2);
+  assert.equal(items['warm-jacket'].noteVars.temp, -2);
+  assert.equal(items['sleeping-bag'].noteVars.temp, -2);
+  assert.equal(items.water.noteKey, 'pack.water.note');
+  assert.equal(items.water.noteVars.stops, 'Ranu Kumbolo, Kalimati');
+});
+
+test('zero water stops and more than three choose the honest note', () => {
+  function water(stops) {
+    let found = null;
+    buildPackingList({ days: 1, people: 1, mountain: { nightTempC: 10, waterStops: stops } })
+      .forEach((g) => g.items.forEach((it) => { if (it.id === 'water') found = it; }));
+    return found;
+  }
+  assert.equal(water([]).noteKey, 'pack.water.none');
+  assert.equal(water(['A', 'B', 'C', 'D']).noteKey, 'pack.water.many');
+  assert.equal(water(['A', 'B', 'C']).noteKey, 'pack.water.note');
+});

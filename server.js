@@ -246,6 +246,15 @@ const DEMO_REPORTS = [
   { id: -5, username: null, stopId: 'rawa-gayonggong', condition: 'slippery', minsAgo: 180, note: 'Boardwalk planks are mossy.' },
   { id: -6, username: 'demo-hiker-nina', stopId: 'kandang-badak', condition: 'heavy-fog', minsAgo: 300, note: '' },
   { id: -7, username: 'demo-hiker-oki', stopId: 'air-panas', condition: 'slippery', minsAgo: 540, note: '' },
+  // The national catalog's popular mountains, so a reviewer opening one of
+  // their guides sees a lived-in page in the demo. Fake identities only.
+  { id: -8, username: 'demo-hiker-sari', stopId: 'semeru-ranupane-ranu-kumbolo', condition: 'heavy-fog', minsAgo: 25, note: 'Fog came in over the lake before dawn.' },
+  { id: -9, username: 'demo-hiker-dewi', stopId: 'semeru-ranupane-kalimati', condition: 'no-water', minsAgo: 90, note: 'No water at Kalimati. Fill up at Ranu Kumbolo.' },
+  { id: -10, username: 'demo-hiker-raka', stopId: 'rinjani-sembalun-pelawangan', condition: 'extreme-weather', minsAgo: 60, confirms: 2, note: 'Wind is tearing at the tents on the rim.' },
+  { id: -11, username: 'demo-hiker-bima', stopId: 'rinjani-sembalun-summit', condition: 'slippery', minsAgo: 180, note: '' },
+  { id: -12, username: 'demo-hiker-nina', stopId: 'merbabu-selo-summit', condition: 'heavy-fog', minsAgo: 45, note: "Can't see the next post." },
+  { id: -13, username: 'demo-hiker-oki', stopId: 'prau-patak-banteng-summit', condition: 'slippery', minsAgo: 120, note: '' },
+  { id: -14, username: 'demo-hiker-tari', stopId: 'kerinci-kersik-tuo-camp', condition: 'wildlife', minsAgo: 150, note: 'Monkeys around the camp. Hang your food.' },
 ];
 
 app.get('/api/me', (req, res) => {
