@@ -141,6 +141,12 @@
       "expectText": "Estimate, not a survey"
     },
     {
+      "name": "Mountain cards show the difficulty badge and time up",
+      "path": "/#mountains",
+      "expectText": "About 8 to 10 hours up",
+      "expectSelector": "#catalog-results .mtn-card .diff-badge"
+    },
+    {
       "name": "A mountain opens its own guide",
       "path": "/?mountain=semeru",
       "expectText": "Ranu Pane route to Mahameru",

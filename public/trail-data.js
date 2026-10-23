@@ -469,6 +469,8 @@
       province: destination.province,
       category: destination.category,
       summitM: route.summitM,
+      hoursUpMin: route.hoursUpMin,
+      hoursUpMax: route.hoursUpMax,
       difficulty: route.difficulty || null,
       status: route.status || destination.status,
       figures: route.figures || null,

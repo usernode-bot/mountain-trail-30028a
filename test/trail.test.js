@@ -237,4 +237,11 @@ test('the catalog view is the flat row the screen reads', () => {
   const g = T.catalogView(T.DEST_BY_ID['gede-pangrango']);
   assert.equal(g.category, 'gunung');
   assert.equal(g.province, 'Jawa Barat');
+  assert.equal(v.hoursUpMin, 8);
+  assert.equal(v.hoursUpMax, 10);
+  T.DESTINATIONS.forEach((d) => {
+    const view = T.catalogView(d);
+    assert.ok(Number.isFinite(view.hoursUpMin), d.id + ' has no hoursUpMin');
+    assert.ok(Number.isFinite(view.hoursUpMax), d.id + ' has no hoursUpMax');
+  });
 });
