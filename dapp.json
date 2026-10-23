@@ -25,6 +25,22 @@
       "expectSelector": "#trail-line"
     },
     {
+      "name": "Mountain banner shows the summit height and its chips",
+      "path": "/",
+      "expectText": "Distance 9.6 km",
+      "expectSelector": "#mtn-hero #mtn-distance"
+    },
+    {
+      "name": "Colour mode button sits in the mountain banner",
+      "path": "/",
+      "expectSelector": "#mtn-hero #theme-btn"
+    },
+    {
+      "name": "Report tab opens under a mountain banner",
+      "path": "/#report",
+      "expectSelector": "#tab-report .banner-title"
+    },
+    {
       "name": "Trail tab shows the route difficulty",
       "path": "/",
       "expectText": "Difficulty: Hard",

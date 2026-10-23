@@ -27,7 +27,17 @@
       'tab.packing': 'Packing',
       'tab.location': 'Location',
 
+      // ── Colour mode (the banner's button) ──
+      'theme.auto': 'Auto',
+      'theme.light': 'Light',
+      'theme.dark': 'Dark',
+      'theme.aria': 'Colour mode: {mode}. Tap to change.',
+
       // ── Trail tab ──
+      'hero.routeLine': 'Cibodas route to Puncak Gede, about {hours} hours up.',
+      'hero.elevLabel': 'Summit elevation {m} m',
+      'hero.distance': 'Distance',
+      'hero.status': 'Trail status: {level}',
       'trail.route': 'Cibodas route to Puncak Gede, {elev} m. {km} km and {climb} m of climbing, about {hours} hours up.',
       'trail.hours': '5 to 7',
       'trail.saved': 'Guide saved for offline use',
@@ -369,7 +379,17 @@
       'tab.packing': 'Bawaan',
       'tab.location': 'Lokasi',
 
+      // ── Colour mode (the banner's button) ──
+      'theme.auto': 'Otomatis',
+      'theme.light': 'Terang',
+      'theme.dark': 'Gelap',
+      'theme.aria': 'Mode warna: {mode}. Ketuk untuk ganti.',
+
       // ── Trail tab ──
+      'hero.routeLine': 'Jalur Cibodas ke Puncak Gede, sekitar {hours} jam naik.',
+      'hero.elevLabel': 'Ketinggian puncak {m} m',
+      'hero.distance': 'Jarak',
+      'hero.status': 'Status jalur: {level}',
       'trail.route': 'Jalur Cibodas ke Puncak Gede, {elev} m. {km} km dengan tanjakan {climb} m, sekitar {hours} jam naik.',
       'trail.hours': '5 sampai 7',
       'trail.saved': 'Panduan tersimpan, bisa dibuka tanpa sinyal',

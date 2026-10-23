@@ -37,6 +37,16 @@
     --on-warn: 255 255 255;
     --water: 22 98 160;       /* map blue for water sources */
 
+    /* The mountain banner's sky, dawn through dusk, and the ridgeline under
+       it. Part of the trail's own subject colours, like amber and map blue,
+       so it never competes with the green primary action. */
+    --sky-1: 236 228 213;     /* dawn */
+    --sky-2: 219 230 220;     /* morning mist */
+    --sky-3: 184 203 192;     /* dusk */
+    --sky-glow: 243 208 168;  /* the low sun over the first ridge */
+    --ridge: 24 63 45;        /* the forest silhouette */
+    --mist: 255 255 255;      /* the cloud band that drifts */
+
     /* How much bottom chrome the app's own tab bar takes up (4 px + the
        52 px tabs + 12 px, plus the home-indicator inset the platform
        forwards). The native kit's toast reads this and rests 16 px above
@@ -58,6 +68,15 @@
     --warn: 240 178 64;
     --on-warn: 40 24 0;
     --water: 120 182 236;
+
+    /* The same trail after dark: a deep forest night with the ridges lit by
+       the mist rather than darkened by it. */
+    --sky-1: 27 37 42;
+    --sky-2: 17 26 22;
+    --sky-3: 10 17 14;
+    --sky-glow: 96 74 54;
+    --ridge: 132 175 148;
+    --mist: 178 208 190;
   }
   /* el.hidden = true hides an element even when a class gives it a display
      (flex, the components below). */
@@ -116,13 +135,13 @@
     @apply divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface;
   }
   .list-row {
-    @apply flex min-h-11 items-center gap-3 px-4 py-3;
+    @apply flex min-h-11 items-center gap-3 px-4 py-3.5;
   }
 
   /* A card: one self-contained thing, usually something you tap. Never put
      a card inside a card or a .list. */
   .card {
-    @apply rounded-xl border border-line bg-surface p-4;
+    @apply rounded-xl border border-line bg-surface p-5;
   }
 
   /* The label above a section: sentence case, never uppercase or tracked. */
@@ -263,6 +282,146 @@
   }
   .kv-value {
     @apply text-right text-body text-fg;
+  }
+
+  /* ── The mountain banner ──────────────────────────────────────────────
+   * The app's signature card: the trail from dawn to dusk. The mountain's
+   * name and elevation are set large at the top, its figures sit under them
+   * as chips, and three ridgelines carry the card's foot while a band of
+   * mist drifts slowly across them. Nothing animates where the viewer has
+   * asked for reduced motion. */
+  .hero {
+    position: relative;
+    overflow: hidden;
+    border-radius: 1.5rem;
+    border: 1px solid rgb(var(--line));
+    background:
+      radial-gradient(120% 90% at 88% 0%, rgb(var(--sky-glow) / 0.55), transparent 62%),
+      linear-gradient(165deg, rgb(var(--sky-1)) 0%, rgb(var(--sky-2)) 50%, rgb(var(--sky-3)) 100%);
+  }
+  .hero-body {
+    @apply relative px-5 pt-4;
+    z-index: 2;
+  }
+  .hero-top {
+    @apply flex items-center justify-between gap-3;
+  }
+  /* The category and province over the name. Muted, small, never an
+     uppercase eyebrow. */
+  .hero-kicker {
+    @apply flex min-h-11 items-center gap-1.5 text-small text-muted;
+  }
+  .hero-kicker > span {
+    @apply inline-flex items-center gap-1;
+  }
+  .hero-kicker-sep { @apply text-muted/70; }
+  .hero-name {
+    @apply font-display text-hero;
+  }
+  .hero-elev {
+    @apply mt-1 flex items-baseline gap-1.5 text-fg;
+    font-variant-numeric: tabular-nums;
+  }
+  .hero-elev-num { @apply font-display text-title; }
+  .hero-elev-unit { @apply text-body font-medium text-muted; }
+  .hero-route { @apply mt-2 text-small text-muted; }
+  .hero-chips {
+    @apply mt-3 flex flex-wrap items-center gap-1.5;
+  }
+  /* A figure at a glance: difficulty, distance, trail status. Small, on a
+     translucent surface so it reads over the sky in both looks. */
+  .hero-chip {
+    @apply inline-flex min-h-7 items-center gap-1.5 rounded-full border px-2.5 py-1 text-small text-fg;
+    background: rgb(var(--surface) / 0.78);
+    border-color: rgb(var(--line) / 0.85);
+  }
+  .hero-chip-label { @apply text-muted; }
+  .hero-chip-dot {
+    @apply h-2 w-2 flex-none rounded-full;
+    background: currentColor;
+  }
+  .hero-chip-accent {
+    color: rgb(var(--accent));
+    border-color: rgb(var(--accent) / 0.35);
+  }
+  .hero-chip-warn {
+    color: rgb(var(--warn));
+    border-color: rgb(var(--warn) / 0.4);
+  }
+  .hero-chip-danger {
+    color: rgb(var(--danger));
+    border-color: rgb(var(--danger) / 0.4);
+  }
+  .hero-meta { @apply mt-3 flex items-center gap-1.5 text-small text-muted; }
+  /* The colour-mode control, top right of the banner. */
+  .hero-theme {
+    @apply inline-flex min-h-11 flex-none items-center gap-1.5 rounded-full border px-3 text-small font-medium text-fg
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus;
+    background: rgb(var(--surface) / 0.78);
+    border-color: rgb(var(--line) / 0.85);
+  }
+  .hero-theme:hover { background: rgb(var(--surface) / 0.95); }
+
+  .hero-scene {
+    @apply relative mt-4 h-24 w-full;
+    z-index: 1;
+  }
+  .hero-scene-svg { @apply absolute inset-0 h-full w-full; }
+  .ridge { fill: rgb(var(--ridge)); }
+  .ridge-back { opacity: 0.22; }
+  .ridge-mid { opacity: 0.38; }
+  .ridge-front { opacity: 0.62; }
+  .mist {
+    position: absolute;
+    top: 36%;
+    left: -45%;
+    width: 42%;
+    height: 14px;
+    border-radius: 9999px;
+    background: rgb(var(--mist) / 0.55);
+    filter: blur(7px);
+    animation: mist-drift 74s linear infinite;
+    pointer-events: none;
+  }
+  .mist-b {
+    top: 58%;
+    width: 34%;
+    animation-duration: 104s;
+    animation-delay: -42s;
+  }
+  @keyframes mist-drift {
+    from { transform: translateX(0); }
+    to { transform: translateX(340%); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .mist { animation: none; left: 16%; }
+    .mist-b { left: 54%; }
+  }
+
+  /* The same sky at less height, over the Report, Packing and Location
+     tabs: a heading and one quiet ridge line under it. */
+  .banner {
+    position: relative;
+    overflow: hidden;
+    border-radius: 1.25rem;
+    border: 1px solid rgb(var(--line));
+    padding: 1.25rem 1.25rem 2.5rem;
+    background:
+      radial-gradient(120% 130% at 88% 0%, rgb(var(--sky-glow) / 0.4), transparent 64%),
+      linear-gradient(160deg, rgb(var(--sky-1)) 0%, rgb(var(--sky-2)) 58%, rgb(var(--sky-3)) 100%);
+  }
+  .banner-body { position: relative; z-index: 2; }
+  .banner-title { @apply font-display text-heading; }
+  .banner-sub { @apply mt-1 text-body text-muted; }
+  .banner-ridge {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 44px;
+    background: rgb(var(--ridge));
+    opacity: 0.16;
+    clip-path: polygon(0 72%, 10% 48%, 20% 64%, 32% 30%, 44% 62%, 56% 44%, 68% 66%, 80% 36%, 90% 58%, 100% 46%, 100% 100%, 0 100%);
   }
 
   /* The trail line, the app's signature: a dashed rail the way trails are
@@ -430,7 +589,10 @@
      background runs the full width; its items stay within the content
      column's width, centred, so desktop tabs sit by the content. */
   .tab-bar {
-    @apply fixed inset-x-0 bottom-0 z-40 flex border-t border-line bg-surface;
+    @apply fixed inset-x-0 bottom-0 z-40 flex border-t border-line;
+    background: rgb(var(--surface) / 0.92);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
     padding: 4px 4px calc(12px + var(--un-safe-inset-bottom, env(safe-area-inset-bottom, 0px)));
   }
   .tab-bar-items {
