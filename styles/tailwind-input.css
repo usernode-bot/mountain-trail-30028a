@@ -242,6 +242,26 @@
     color: rgb(var(--muted));
   }
 
+  /* "Estimate, not a survey" with its info icon (a button that opens the
+     explanation), and the data date beside it. The pill keeps the badge's
+     look; the button around it is a full 44 px tap target. */
+  .est-row {
+    @apply flex flex-wrap items-center gap-x-2 text-small text-muted;
+  }
+  .est-info {
+    @apply -my-1.5 inline-flex min-h-11 items-center rounded-full text-small
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus;
+  }
+  .est-pill {
+    @apply inline-flex min-h-7 items-center gap-1 rounded-full pl-2.5 pr-2;
+    background: rgb(var(--raised));
+    color: rgb(var(--muted));
+  }
+  .est-pill svg { color: rgb(var(--accent)); }
+  .est-how {
+    @apply flex list-disc flex-col gap-1.5 pl-5 text-body;
+  }
+
   /* The two-per-row grid the weather card uses for basecamp and summit. */
   .wx-grid {
     @apply grid grid-cols-2 gap-3;
