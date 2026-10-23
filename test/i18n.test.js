@@ -113,9 +113,11 @@ test('lookup and fallback', function () {
   assert.strictEqual(I18N.t('en', 'no.such.key'), 'no.such.key');
   assert.strictEqual(I18N.tx('en', 'any.key', 'X'), 'X');
   assert.strictEqual(I18N.tx('id', 'any.key', 'X'), 'X'); // falls back to the English source
-  assert.strictEqual(I18N.normalizeLang('fr'), 'en');
+  // Bahasa Indonesia is the default for anything unknown or unset (#42).
+  assert.strictEqual(I18N.normalizeLang('fr'), 'id');
   assert.strictEqual(I18N.normalizeLang('id'), 'id');
-  assert.strictEqual(I18N.normalizeLang(null), 'en');
+  assert.strictEqual(I18N.normalizeLang('en'), 'en');
+  assert.strictEqual(I18N.normalizeLang(null), 'id');
 });
 
 test('plurals and relative times', function () {
@@ -136,6 +138,67 @@ test('numbers use the language’s separators', function () {
   assert.strictEqual(I18N.fmtKm('en', 9.6), '9.6');
   assert.strictEqual(I18N.fmtKm('id', 0), '0');
 });
+test('five languages, each in its own file, Indonesian first and default', function () {
+  assert.deepStrictEqual(I18N.LANGS, ['id', 'en', 'jv', 'su', 'ms']);
+  assert.strictEqual(I18N.DEFAULT_LANG, 'id');
+  I18N.LANGS.forEach(function (l) {
+    var file = require('../public/lang/' + l + '.js');
+    assert.ok(Object.keys(file).length > 100, l + '.js carries too few strings');
+    assert.ok(I18N.LANG_NAMES[l], 'no name for ' + l);
+    assert.strictEqual(I18N.normalizeLang(l), l);
+  });
+});
+
+test('jv, su and ms only carry keys Indonesian has, with the same placeholders', function () {
+  ['jv', 'su', 'ms'].forEach(function (l) {
+    var d = require('../public/lang/' + l + '.js');
+    Object.keys(d).forEach(function (k) {
+      assert.ok(ID[k] !== undefined, l + ' has a key id lacks: ' + k);
+      assert.strictEqual(placeholders(d[k]), placeholders(ID[k]), 'placeholder mismatch on ' + l + ' ' + k);
+    });
+    ['tab.trail', 'tab.mountains', 'catalog.saved', 'lang.title', 'lang.aria', 'time.at'].forEach(function (k) {
+      assert.ok(d[k], l + ' is missing ' + k);
+    });
+    for (var i = 0; i < 7; i++) assert.ok(d['weekday.' + i], l + ' is missing weekday.' + i);
+  });
+});
+
+test('a key a language lacks reads in Indonesian', function () {
+  var jv = require('../public/lang/jv.js');
+  assert.strictEqual(jv['pack.tent.label'], undefined, 'pick a key jv does not carry');
+  assert.strictEqual(I18N.t('jv', 'pack.tent.label'), ID['pack.tent.label']);
+  assert.strictEqual(I18N.t('jv', 'tab.trail'), jv['tab.trail']);
+  assert.strictEqual(I18N.tx('su', 'cond.wildlife.label', 'Wildlife'), require('../public/lang/su.js')['cond.wildlife.label']);
+  var stop = M.ALL_STOPS[0];
+  assert.strictEqual(I18N.tx('ms', 'stop.' + stop.id + '.detail', stop.detail), ID['stop.' + stop.id + '.detail']);
+  assert.strictEqual(I18N.t('xx', 'tab.trail'), ID['tab.trail']);
+});
+
+test('dates and numbers in the new languages', function () {
+  assert.strictEqual(I18N.fmtNum('jv', 2958), '2.958');
+  assert.strictEqual(I18N.fmtNum('su', 2958), '2.958');
+  assert.strictEqual(I18N.fmtNum('ms', 2958), '2,958');
+  assert.strictEqual(I18N.fmtKm('jv', 9.6), '9,6');
+  assert.strictEqual(I18N.months('ms')[7], 'Ogo');
+  assert.strictEqual(I18N.weekday('en', 1), 'Monday');
+  assert.strictEqual(I18N.weekday('id', 5), 'Jumat');
+  assert.strictEqual(I18N.t('en', 'time.at', { time: '07:05', date: '3 Oct' }), '07:05 on 3 Oct');
+  assert.strictEqual(I18N.t('id', 'time.at', { time: '07:05', date: '3 Okt' }), 'pukul 07:05, 3 Okt');
+});
+
+test('the catalog carries the language button, and the pages load every language before i18n.js', function () {
+  var html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  var saved = html.indexOf('id="catalog-saved"');
+  var btn = html.indexOf('id="lang-btn"');
+  assert.ok(saved > 0 && btn > saved, 'the language button sits after Saved');
+  var core = html.indexOf('src="/i18n.js"');
+  I18N.LANGS.forEach(function (l) {
+    var at = html.indexOf('src="/lang/' + l + '.js"');
+    assert.ok(at > 0 && at < core, '/lang/' + l + '.js loads before i18n.js');
+    assert.ok(html.indexOf('data-lang="' + l + '"') > 0, 'the Location tab offers ' + l);
+  });
+});
+
 test('fmtDate writes a data date in each language, in UTC', function () {
   assert.strictEqual(I18N.fmtDate('en', '2026-10-15T00:00:00Z'), '15 Oct 2026');
   assert.strictEqual(I18N.fmtDate('id', '2026-10-15T00:00:00Z'), '15 Okt 2026');

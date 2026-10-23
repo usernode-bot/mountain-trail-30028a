@@ -76,6 +76,7 @@
     bookmarkOn: '<path d="M6 3h12v18l-6-4-6 4z" fill="currentColor"/>',
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M4.9 4.9l1.4 1.4"/><path d="M17.7 17.7l1.4 1.4"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M4.9 19.1l1.4-1.4"/><path d="M17.7 6.3l1.4-1.4"/>',
     moon: '<path d="M20 15.5A8.5 8.5 0 0 1 8.5 4a8.5 8.5 0 1 0 11.5 11.5z"/>',
+    globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.5v.01"/>',
     contrast: '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" stroke="none"/>',
   };
@@ -95,7 +96,7 @@
   // The language is read straight from mt:lang (never through lsGet: the
   // first render happens before /api/me says whether this is the demo, and
   // the language is the same setting in the demo and outside it).
-  var LANG = 'en';
+  var LANG = I18N.DEFAULT_LANG;
   try { LANG = I18N.normalizeLang(localStorage.getItem('mt:lang')); } catch (e) {}
   function t(key, vars) { return I18N.t(LANG, key, vars); }
   function tn(key, n, vars) { return I18N.tn(LANG, key, n, vars); }
@@ -418,13 +419,37 @@
     });
     document.documentElement.lang = LANG;
   }
-  var LANG_TEXT = { en: 'English', id: 'Bahasa Indonesia' };
+  // Each language is named in itself, the same in every dictionary.
+  var LANG_TEXT = I18N.LANG_NAMES;
   function renderLangButtons() {
     Array.prototype.forEach.call(document.querySelectorAll('[data-lang]'), function (btn) {
       var on = btn.getAttribute('data-lang') === LANG;
       btn.setAttribute('aria-pressed', on ? 'true' : 'false');
       btn.innerHTML = on ? iconSvg('check', 'h-4 w-4') + esc(LANG_TEXT[btn.getAttribute('data-lang')]) : esc(LANG_TEXT[btn.getAttribute('data-lang')]);
     });
+    // The catalog's globe button shows the current language's code.
+    var pick = $('lang-btn');
+    if (pick) {
+      pick.innerHTML = iconSvg('globe', 'h-4 w-4') + '<span>' + esc(LANG.toUpperCase()) + '</span>';
+      pick.setAttribute('aria-label', t('lang.aria', { name: LANG_TEXT[LANG] }));
+    }
+  }
+  // The globe button's picker: the kit's menu (a sheet on a phone, a
+  // dropdown on a desktop), the current language ticked.
+  function openLangPicker(anchor) {
+    var items = I18N.LANGS.map(function (code) {
+      var item = {
+        label: LANG_TEXT[code],
+        handler: function () { if (code !== LANG) setLang(code); },
+      };
+      if (code === LANG) {
+        var tick = document.createElement('span');
+        tick.innerHTML = iconSvg('check', 'h-4 w-4');
+        item.iconEl = tick.firstChild;
+      }
+      return item;
+    });
+    rowMenu(anchor, t('lang.title'), items);
   }
   function setLang(v) {
     LANG = I18N.normalizeLang(v);
@@ -435,6 +460,8 @@
     Array.prototype.forEach.call(document.querySelectorAll('[data-lang]'), function (btn) {
       btn.addEventListener('click', function () { setLang(btn.getAttribute('data-lang')); });
     });
+    var pick = $('lang-btn');
+    if (pick) pick.addEventListener('click', function () { openLangPicker(pick); });
   }
 
   // ── Colour mode: Auto (follows Homeroom), Light, Dark ─────────────────
@@ -1063,13 +1090,12 @@
 
     // ── Summit weather: curated 3-day forecast, warnings highlighted ──────
     function forecastDays(now) {
-      var locale = LANG === 'id' ? 'id-ID' : 'en-US';
       var out = [];
       for (var i = 0; i < 3; i++) {
         var d = new Date(now.getTime() + i * 86400000);
         var name = i === 0 ? t('weather.today')
           : (i === 1 ? t('weather.tomorrow')
-            : new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(d));
+            : I18N.weekday(LANG, d.getDay()));
         out.push({ name: name, when: name });
       }
       return out;
@@ -2299,7 +2325,7 @@
     var h = d.getHours(), m = d.getMinutes();
     var time = (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
     var date = d.getDate() + ' ' + months[d.getMonth()];
-    return LANG === 'id' ? 'pukul ' + time + ', ' + date : time + ' on ' + date;
+    return t('time.at', { time: time, date: date });
   }
   function buildMessage() {
     var loc = lsGet('location', null);

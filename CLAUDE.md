@@ -104,8 +104,11 @@ tab lists every mountain with search, difficulty, height and status
 filters, a Popular strip and saved guides; tapping one opens its own copy
 of the existing guide (Trail, Report, Packing, Location) with the same
 status, permits, weather, stops and reports. The whole interface speaks
-Indonesian and English (`public/i18n.js`; a header pill switches, the
-choice is remembered on the phone). The guide ships with the app as static
+Bahasa Indonesia (the default), English, Basa Jawa, Basa Sunda and Bahasa
+Melayu (one file per language in `public/lang/`, loaded by
+`public/i18n.js`; a globe button beside Saved on the Mountains tab and the
+buttons on the Location tab switch, the choice is remembered on the
+phone). The guide ships with the app as static
 content in `public/trail-data.js`, which also carries each route's curated
 status, permits and quota, and Gede's 3-day forecast, every block
 timestamped and marked "not verified" until a person confirms it, because
@@ -212,13 +215,21 @@ Re-theme by changing the token values there, keeping every text pair at
   the server, and a new copy string goes in both dictionaries under
   `theme.*`.
 
-- The app reads in English or Bahasa Indonesia. The language lives in
-  `mt:lang` in localStorage (the same key in the demo and outside it) and is
-  never sent to the server; English is the default and any unknown value is
-  English. New user-facing strings go in BOTH dictionaries in
-  `public/i18n.js` (with a `data-i18n`/`data-i18n-label`/
-  `data-i18n-placeholder` attribute in `index.html` for static text); the
-  test in `test/i18n.test.js` keeps the two in step. Stop names are never
+- The app reads in Bahasa Indonesia, English, Basa Jawa, Basa Sunda or
+  Bahasa Melayu (request #42). The language lives in `mt:lang` in
+  localStorage (the same key in the demo and outside it) and is never sent
+  to the server; Bahasa Indonesia is the default and any unknown value is
+  Indonesian. Each language's strings are one file in `public/lang/`
+  (`id.js`, `en.js`, `jv.js`, `su.js`, `ms.js`), loaded before `i18n.js`
+  in `index.html` and precached by the service worker. A key a language
+  lacks reads in Indonesian (then English, which only adds English
+  plurals). New user-facing strings go in BOTH `id.js` and `en.js` (with a
+  `data-i18n`/`data-i18n-label`/`data-i18n-placeholder` attribute in
+  `index.html` for static text); the test in `test/i18n.test.js` keeps
+  those two in step. `jv.js`, `su.js` and `ms.js` translate the interface
+  chrome; the guide's long texts (stop descriptions, packing items) fall
+  back to Indonesian until someone translates them, and may carry only
+  keys `id.js` has. The `dapp.json` checks read the Indonesian text. Stop names are never
   translated. Reports store condition ids on the server; labels are only
   for display and translate per viewer.
 - The guide data (mountain, stops, conditions) lives in
@@ -249,10 +260,10 @@ Re-theme by changing the token values there, keeping every text pair at
   hidden by flags. A report flagged by you disappears for you at once.
 - Shared front-end logic lives in small UMD factory modules next to the
   guide: `public/status.js` (status tones, weather-warning thresholds, the
-  24-hour report window) and `public/i18n.js` (every user-facing string in
-  Indonesian and English, key parity asserted by test). Both are precached
+  24-hour report window) and `public/i18n.js` (lookup, plurals, dates and
+  numbers over the per-language files in `public/lang/`). All are precached
   by the service worker like `trail-data.js`. New user-facing copy goes in
-  `i18n.js`, never inline.
+  `public/lang/`, never inline.
 - "Masih berlaku" confirmations live in `report_confirms`, a public
   append-only table like `report_flags`: one row per hiker per report (the
   primary key), a re-sent tap no-ops on its `client_id`. The count shows on
