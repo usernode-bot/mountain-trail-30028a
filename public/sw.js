@@ -5,7 +5,7 @@
  * fetched from the network, never files vendored into the repo), and never
  * touches /api/.
  */
-var CACHE = 'mt-shell-v7';
+var CACHE = 'mt-shell-v8';
 // Report photos saved by the explicit offline save (app.js). Only the page
 // writes here; this worker serves them when the network fails. Kept across
 // shell versions.
@@ -15,6 +15,11 @@ var PRECACHE = [
   '/tailwind.css',
   '/theme.js',
   '/i18n.js',
+  '/lang/id.js',
+  '/lang/en.js',
+  '/lang/jv.js',
+  '/lang/su.js',
+  '/lang/ms.js',
   '/app.js',
   '/trail-data.js',
   '/packing.js',

@@ -142,6 +142,11 @@
         <button type="button" id="catalog-saved" class="chip" aria-pressed="false" aria-label="Show saved guides only" data-i18n-label="catalog.savedAria">
           <span data-i18n="catalog.saved">Saved</span>
         </button>
+        <!-- The language picker. app.js draws the globe and the current
+             language's code (ID, EN, JV, SU, MS) and opens the menu. -->
+        <button type="button" id="lang-btn" class="chip" aria-haspopup="menu" aria-label="Language">
+          <span>ID</span>
+        </button>
       </div>
 
       <div id="catalog-filters"></div>
@@ -367,8 +372,11 @@
 
       <p id="lang-label" class="mb-1.5 mt-6 block text-small font-medium">Language / Bahasa</p>
       <div class="grid grid-cols-2 gap-2" role="group" aria-labelledby="lang-label">
-        <button type="button" class="btn-secondary" data-lang="en" lang="en" aria-pressed="true">English</button>
-        <button type="button" class="btn-secondary" data-lang="id" lang="id" aria-pressed="false">Bahasa Indonesia</button>
+        <button type="button" class="btn-secondary" data-lang="id" lang="id" aria-pressed="true">Bahasa Indonesia</button>
+        <button type="button" class="btn-secondary" data-lang="en" lang="en" aria-pressed="false">English</button>
+        <button type="button" class="btn-secondary" data-lang="jv" lang="jv" aria-pressed="false">Basa Jawa</button>
+        <button type="button" class="btn-secondary" data-lang="su" lang="su" aria-pressed="false">Basa Sunda</button>
+        <button type="button" class="btn-secondary" data-lang="ms" lang="ms" aria-pressed="false">Bahasa Melayu</button>
       </div>
 
       <h2 class="section-label mt-8" data-i18n="loc.msg.section">Message to send</h2>
@@ -422,6 +430,11 @@
   <script src="/status.js"></script>
   <script src="/share-links.js"></script>
   <script src="/catalog.js"></script>
+  <script src="/lang/id.js"></script>
+  <script src="/lang/en.js"></script>
+  <script src="/lang/jv.js"></script>
+  <script src="/lang/su.js"></script>
+  <script src="/lang/ms.js"></script>
   <script src="/i18n.js"></script>
   <script src="/app.js"></script>
 </body>

@@ -27,7 +27,7 @@
     {
       "name": "Mountain banner shows the summit height and its chips",
       "path": "/",
-      "expectText": "Distance 9.6 km",
+      "expectText": "Jarak 9,6 km",
       "expectSelector": "#mtn-hero #mtn-distance"
     },
     {
@@ -43,7 +43,7 @@
     {
       "name": "Trail tab shows the route difficulty",
       "path": "/",
-      "expectText": "Difficulty: Hard",
+      "expectText": "Tingkat kesulitan: Sulit",
       "expectSelector": "#mtn-difficulty .diff-meter"
     },
     {
@@ -55,7 +55,7 @@
       "id": "trail.demo",
       "name": "Populated demo",
       "path": "/?demo=1",
-      "expectText": "Staging demo",
+      "expectText": "Demo staging",
       "visual": true,
       "impact": [
         "public/**",
@@ -72,12 +72,12 @@
     {
       "name": "Packing tab",
       "path": "/#packing",
-      "expectText": "Shared by the group"
+      "expectText": "Milik rombongan"
     },
     {
       "name": "Location tab",
       "path": "/#location",
-      "expectText": "Share with basecamp"
+      "expectText": "Bagikan ke basecamp"
     },
     {
       "name": "Location tab sends by WhatsApp or SMS",
@@ -87,46 +87,52 @@
     {
       "name": "Location demo shows a waiting message",
       "path": "/?demo=1#location",
-      "expectText": "Waiting for signal"
+      "expectText": "Menunggu sinyal"
     },
     {
       "name": "Trail tab demo shows the status banner, permits and weather",
       "path": "/?demo=1",
-      "expectText": "Open with limits",
+      "expectText": "Dibuka Terbatas",
       "expectSelector": "#permits-card"
     },
     {
       "name": "Trail tab demo shows the weather card",
       "path": "/?demo=1",
-      "expectText": "Basecamp and summit weather",
+      "expectText": "Cuaca basecamp dan puncak",
       "expectSelector": "#weather-card"
     },
     {
       "name": "Trail tab offers saving reports for offline",
       "path": "/?demo=1",
-      "expectText": "Save reports for offline",
+      "expectText": "Simpan laporan untuk offline",
       "expectSelector": "#offline-save"
     },
     {
       "name": "Trail tab demo shows the notifications section",
       "path": "/?demo=1",
-      "expectText": "Notifications",
+      "expectText": "Notifikasi",
       "expectSelector": "#notif-list"
     },
     {
       "name": "Report tab demo shows the new condition buttons",
       "path": "/?demo=1#report",
-      "expectText": "Fallen tree"
+      "expectText": "Pohon tumbang"
     },
     {
       "name": "Report tab demo offers the still-valid confirmation",
       "path": "/?demo=1#report",
-      "expectText": "Still valid"
+      "expectText": "Masih berlaku"
+    },
+    {
+      "name": "Catalog offers the language picker, Indonesian by default",
+      "path": "/#mountains",
+      "expectText": "Tersimpan",
+      "expectSelector": "#lang-btn[aria-label^='Bahasa: Bahasa Indonesia']"
     },
     {
       "name": "Mountains catalog opens with search",
       "path": "/#mountains",
-      "expectText": "Mountains of Indonesia",
+      "expectText": "Gunung di Indonesia",
       "expectSelector": "#mountain-search"
     },
     {
@@ -138,25 +144,25 @@
     {
       "name": "Catalog shows the estimate label",
       "path": "/#mountains",
-      "expectText": "Estimate, not a survey"
+      "expectText": "Perkiraan, bukan survei"
     },
     {
       "name": "A mountain opens its own guide",
       "path": "/?mountain=semeru",
-      "expectText": "Ranu Pane route to Mahameru",
+      "expectText": "Jalur Ranu Pane ke Mahameru",
       "expectSelector": "#trail-line"
     },
     {
       "name": "A mountain guide offers saving",
       "path": "/?mountain=semeru",
-      "expectText": "Save guide",
+      "expectText": "Simpan panduan",
       "expectSelector": "#guide-save"
     },
     {
       "id": "catalog.demo",
       "name": "Populated catalog demo",
       "path": "/?demo=1#mountains",
-      "expectText": "Staging demo",
+      "expectText": "Demo staging",
       "expectSelector": "#catalog-results",
       "visual": true,
       "impact": [
@@ -169,7 +175,7 @@
     {
       "name": "Demo mountain shows its own reports",
       "path": "/?demo=1&mountain=semeru",
-      "expectText": "Heavy fog at Ranu Kumbolo",
+      "expectText": "Kabut tebal di Ranu Kumbolo",
       "expectSelector": "#status-strip"
     }
   ]
