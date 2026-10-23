@@ -73,8 +73,11 @@
     junction: '<path d="M12 21v-8"/><path d="M12 13L6 3"/><path d="M12 13l6-10"/>',
     bookmark: '<path d="M6 3h12v18l-6-4-6 4z"/>',
     sliders: '<path d="M4 7h10"/><path d="M18 7h2"/><circle cx="16" cy="7" r="2"/><path d="M4 17h2"/><path d="M10 17h10"/><circle cx="8" cy="17" r="2"/>',
+    filter: '<path d="M4 7h16"/><path d="M7 12h10"/><path d="M10 17h4"/>',
+    bookmarkOn: '<path d="M6 3h12v18l-6-4-6 4z" fill="currentColor"/>',
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M4.9 4.9l1.4 1.4"/><path d="M17.7 17.7l1.4 1.4"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M4.9 19.1l1.4-1.4"/><path d="M17.7 6.3l1.4-1.4"/>',
     moon: '<path d="M20 15.5A8.5 8.5 0 0 1 8.5 4a8.5 8.5 0 1 0 11.5 11.5z"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.5v.01"/>',
     contrast: '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" stroke="none"/>',
   };
   function iconSvg(name, cls) {
@@ -295,15 +298,112 @@
     presentSheet(wrap);
     return Promise.resolve(null);
   }
-  function askForAccount() {
+  function askForAccount(actionKey) {
     try {
       if (window.usernode && typeof window.usernode.askForAccount === 'function') {
-        window.usernode.askForAccount({ action: t('account.report') });
+        window.usernode.askForAccount({ action: t(actionKey || 'account.report') });
         return;
       }
     } catch (e) {}
     kitToast(t('toast.account'));
   }
+
+  // ── Estimates: what they mean, when the data was updated, corrections ──
+  // Every "Estimate, not a survey" label is a button that opens a short
+  // explanation in the hiker's language, with the date the guide data was
+  // last updated beside it and a "Report a correction" form (request #45).
+  // scope 'route' is the open route; 'catalog' is the whole national list.
+  function estimateDate(scope) {
+    if (scope === 'route' && MOUNTAIN.figures && MOUNTAIN.figures.checkedAt) return MOUNTAIN.figures.checkedAt;
+    return M.DATA_CHECKED_AT;
+  }
+  function estimateRowHtml(scope) {
+    return '<button type="button" class="est-info" data-est="' + scope + '" aria-haspopup="dialog" aria-label="' +
+      esc(t('approx.label') + '. ' + t('est.infoAria')) + '">' +
+      '<span class="est-pill"><span>' + esc(t('approx.label')) + '</span>' + iconSvg('info', 'h-4 w-4') + '</span></button>' +
+      '<span class="est-date">' + esc(t('est.updated', { date: I18N.fmtDate(LANG, estimateDate(scope)) })) + '</span>';
+  }
+  function routeLabel() { return MOUNTAIN.name + ' · ' + MOUNTAIN.routeName; }
+
+  function openEstimateInfo(scope) {
+    var date = I18N.fmtDate(LANG, estimateDate(scope));
+    var wrap = document.createElement('div');
+    wrap.className = 'flex flex-col gap-3 p-4';
+    wrap.setAttribute('role', 'dialog');
+    wrap.setAttribute('aria-label', t('est.title'));
+    wrap.innerHTML = '<h2 class="font-display text-heading">' + esc(t('est.title')) + '</h2>' +
+      '<p class="text-body">' + esc(t('est.what')) + '</p>' +
+      '<h3 class="text-body font-semibold">' + esc(t('est.howTitle')) + '</h3>' +
+      '<ul class="est-how">' +
+      ['height', 'distance', 'time', 'difficulty'].map(function (k) {
+        return '<li>' + esc(t('est.how.' + k)) + '</li>';
+      }).join('') + '</ul>' +
+      '<p class="text-small text-muted">' + esc(t('est.caution')) + '</p>' +
+      '<p class="text-small text-muted">' + esc(scope === 'route'
+        ? t('est.updatedFor', { date: date, route: routeLabel() })
+        : t('est.updatedAll', { date: date })) + '</p>' +
+      '<button type="button" class="btn-secondary w-full" data-correct>' + esc(t('est.correct')) + '</button>';
+    wrap.querySelector('[data-correct]').addEventListener('click', function () {
+      if (!ME.user) { askForAccount('account.correct'); return; }
+      showCorrectionForm(wrap, scope, sheet);
+    });
+    var sheet = presentSheet(wrap);
+  }
+  // The form replaces the explanation inside the same sheet. Cancel, the
+  // title and Send sit at the top so the keyboard never covers them.
+  function showCorrectionForm(wrap, scope, sheet) {
+    var clientId = uuid(); // one per form, so a double tap stores one row
+    wrap.setAttribute('aria-label', t('corr.title'));
+    wrap.innerHTML = '<div class="flex items-center justify-between gap-2">' +
+      '<button type="button" class="btn-text" data-close>' + esc(t('cancel')) + '</button>' +
+      '<h2 class="text-center text-body font-semibold">' + esc(t('corr.title')) + '</h2>' +
+      '<button type="button" class="btn-primary" data-send>' + esc(t('corr.send')) + '</button></div>' +
+      (scope === 'route' ? '<p class="text-small text-muted">' + esc(t('corr.for', { route: routeLabel() })) + '</p>' : '') +
+      '<div><label for="corr-field" class="mb-1.5 block text-small font-medium">' + esc(t('corr.field')) + '</label>' +
+      '<select id="corr-field" class="field">' +
+      ['height', 'distance', 'time', 'difficulty', 'other'].map(function (f) {
+        return '<option value="' + f + '">' + esc(t('corr.field.' + f)) + '</option>';
+      }).join('') + '</select></div>' +
+      '<div><label for="corr-note" class="mb-1.5 block text-small font-medium">' + esc(t('corr.note')) + '</label>' +
+      '<textarea id="corr-note" class="field" rows="3" maxlength="300" placeholder="' +
+      esc(t(scope === 'route' ? 'corr.note.ph' : 'corr.note.phCatalog')) + '"></textarea></div>' +
+      '<p id="corr-error" class="text-small text-danger" role="alert" hidden></p>' +
+      '<p class="text-small text-muted">' + esc(t('corr.hint')) + '</p>';
+    var note = wrap.querySelector('#corr-note');
+    var field = wrap.querySelector('#corr-field');
+    var err = wrap.querySelector('#corr-error');
+    var send = wrap.querySelector('[data-send]');
+    function showErr(key) { err.textContent = t(key); err.hidden = false; }
+    wrap.querySelector('[data-close]').addEventListener('click', function () { sheet.dismiss(); });
+    send.addEventListener('click', function () {
+      var text = note.value.trim();
+      if (!text) { showErr('corr.empty'); try { note.focus({ preventScroll: true }); } catch (e) {} return; }
+      if (!navigator.onLine) { showErr('corr.offline'); return; }
+      err.hidden = true;
+      send.disabled = true;
+      send.textContent = t('corr.sending');
+      api('/api/corrections', {
+        method: 'POST',
+        body: { clientId: clientId, routeId: scope === 'route' ? MOUNTAIN.routeId : null, field: field.value, note: text },
+      }).catch(function () { return { ok: false }; }).then(function (res) {
+        send.disabled = false;
+        send.textContent = t('corr.send');
+        if (res.ok) {
+          sheet.dismiss();
+          kitToast(t('corr.sent'));
+        } else if (res.status === 401) {
+          askForAccount('account.correct');
+        } else {
+          showErr('corr.failed');
+        }
+      });
+    });
+    try { note.focus({ preventScroll: true }); } catch (e) {}
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest && e.target.closest('[data-est]');
+    if (b) openEstimateInfo(b.getAttribute('data-est'));
+  });
 
   // ── Language ───────────────────────────────────────────────────────────
   // Every static string in index.html carries its English text and a key;
@@ -463,25 +563,45 @@
     return tone === 'danger' ? 'text-danger' : (tone === 'warn' ? 'text-warn' : 'text-accent');
   }
 
-  function catalogRow(e) {
+  // A mountain card: the drawn picture, the name and summit height, a
+  // difficulty badge in its colour (green easy, amber moderate, red hard),
+  // the estimated time up and the status. The bookmark is its own button
+  // over the picture, so it never opens the guide.
+  var DIFF_BADGE = { easy: 'diff-badge diff-badge-easy', moderate: 'diff-badge diff-badge-moderate', hard: 'diff-badge diff-badge-hard' };
+  function catalogCard(e) {
     var level = e.status && e.status.level;
-    var dot = level ? '<span class="mr-1 inline-block h-2 w-2 rounded-full ' + statusDotClass(level) + '"></span>' : '';
-    var status = level ? '<span class="' + statusTextClass(level) + '">' + dot + esc(statusWord(level)) + '</span>' : '';
-    var bookmark = e.saved ? '<span class="ml-1 text-accent">' + iconSvg('bookmark', 'h-4 w-4') + '</span>' : '';
-    return '<li><button type="button" class="list-row w-full text-left" data-mountain="' + e.id + '"' +
+    var dot = level ? '<span class="mr-1 inline-block h-2 w-2 flex-none rounded-full ' + statusDotClass(level) + '"></span>' : '';
+    var status = level ? '<span class="mtn-card-status ' + statusTextClass(level) + '">' + dot + esc(statusWord(level)) + '</span>' : '';
+    var diff = DIFF_BADGE[e.difficulty] ? '<span class="' + DIFF_BADGE[e.difficulty] + '">' + esc(t('diff.' + e.difficulty)) + '</span>' : '';
+    var hasTime = Number.isFinite(e.hoursUpMin) || Number.isFinite(e.hoursUpMax);
+    var time = hasTime ? '<span class="mtn-card-time">' + iconSvg('clock', 'h-4 w-4 flex-none') +
+      '<span>' + esc(t('catalog.card.up', { h: fmtHours(e) })) + '</span></span>' : '';
+    var scene = CAT.scenePaths(e);
+    return '<li class="mtn-card">' +
+      '<button type="button" class="mtn-card-open" data-mountain="' + e.id + '"' +
       (e.id === currentDestId ? ' aria-current="true"' : '') + '>' +
-      '<span class="stop-node text-muted">' + iconSvg(e.category, 'h-5 w-5') + '</span>' +
-      '<span class="min-w-0 flex-1"><span class="flex items-center text-body font-semibold">' + esc(e.name) + bookmark + '</span>' +
-      '<span class="mt-0.5 block text-small text-muted">' + esc(e.province) + ' · ' + fmtM(e.summitM) + ' m</span></span>' +
-      '<span class="ml-auto flex flex-none flex-col items-end gap-0.5 text-small">' +
-      '<span class="flex items-center">' + status + '</span>' +
-      '<span class="text-muted">' + esc(t('diff.' + e.difficulty)) + '</span></span>' +
-      '</button></li>';
+      '<span class="mtn-card-photo" aria-hidden="true">' +
+      '<svg viewBox="0 0 ' + CAT.SCENE_W + ' ' + CAT.SCENE_H + '" preserveAspectRatio="none" focusable="false">' +
+      '<path class="ridge ridge-back" d="' + scene.back + '"/>' +
+      '<path class="ridge ridge-front" d="' + scene.front + '"/></svg></span>' +
+      '<span class="mtn-card-body">' +
+      '<span class="mtn-card-name">' + esc(e.name) + '</span>' +
+      '<span class="mtn-card-elev">' + fmtM(e.summitM) + ' <span class="mtn-card-unit">m</span></span>' +
+      '<span class="mtn-card-place">' + iconSvg(e.category, 'h-4 w-4 flex-none') + '<span class="truncate">' + esc(e.province) + '</span></span>' +
+      (diff || status ? '<span class="mtn-card-tags">' + diff + status + '</span>' : '') +
+      time +
+      '</span></button>' +
+      '<button type="button" class="mtn-card-save" data-save-mountain="' + e.id + '" aria-pressed="' + (e.saved ? 'true' : 'false') +
+      '" aria-label="' + esc(t(e.saved ? 'catalog.card.unsave' : 'catalog.card.save', { name: e.name })) + '">' +
+      iconSvg('bookmark', 'h-5 w-5') + '</button>' +
+      '</li>';
   }
 
-  function catalogChip(attr, value, label, on) {
-    return '<button type="button" class="chip' + (on ? ' chip-on' : '') + '" data-' + attr + '="' + value +
-      '" aria-pressed="' + on + '">' + esc(label) + '</button>';
+  function heightLabel(id) {
+    if (id === 'all') return t('type.all');
+    if (id === 'low') return t('catalog.height.low', { m: fmtM(2000) });
+    if (id === 'mid') return t('catalog.height.mid', { low: fmtM(2000), high: fmtM(2999) });
+    return t('catalog.height.high', { m: fmtM(3000) });
   }
 
   // The rows the current filters leave, for the results and the sheet's
@@ -496,13 +616,6 @@
       savedOnly: catalogState.savedOnly,
       savedIds: savedMountains(),
     });
-  }
-
-  function heightLabel(id) {
-    if (id === 'all') return t('type.all');
-    if (id === 'low') return t('catalog.height.low', { m: fmtM(2000) });
-    if (id === 'mid') return t('catalog.height.mid', { low: fmtM(2000), high: fmtM(2999) });
-    return t('catalog.height.high', { m: fmtM(3000) });
   }
 
   // The Filter button: its label, and a count once a panel filter is set.
@@ -611,14 +724,14 @@
       var popular = CAT.popularEntries(entries, M.POPULAR);
       if (popular.length) {
         html += '<p class="section-label mt-5">' + esc(t('catalog.popular')) + '</p>' +
-          '<ul class="list">' + popular.map(catalogRow).join('') + '</ul>';
+          '<ul class="mtn-strip">' + popular.map(catalogCard).join('') + '</ul>';
       }
       html += '<p class="section-label mt-6">' + esc(t('catalog.all')) + '</p>';
     }
     CAT.groupByIsland(shown, M.ISLANDS).forEach(function (g) {
       html += '<h3 class="section-label mt-4">' + esc(t('island.' + g.island)) +
         ' <span class="chip-count">' + g.entries.length + '</span></h3>' +
-        '<ul class="list">' + g.entries.map(catalogRow).join('') + '</ul>';
+        '<ul class="mtn-grid">' + g.entries.map(catalogCard).join('') + '</ul>';
     });
     el.innerHTML = html;
     Array.prototype.forEach.call(el.querySelectorAll('[data-mountain]'), function (btn) {
@@ -627,6 +740,19 @@
         selectMountain(id);
         switchTab('trail');
         window.scrollTo({ top: 0 });
+      });
+    });
+    Array.prototype.forEach.call(el.querySelectorAll('[data-save-mountain]'), function (btn) {
+      btn.addEventListener('click', async function () {
+        var id = btn.getAttribute('data-save-mountain');
+        var name = (M.DEST_BY_ID[id] || {}).name || id;
+        var was = isSaved(id);
+        await toggleSaved(id);
+        var now = isSaved(id);
+        if (now !== was) kitToast(t(now ? 'catalog.card.saved' : 'catalog.card.removed', { name: name }));
+        // The list was redrawn; keep the keyboard where it was.
+        var again = $('catalog-results') && $('catalog-results').querySelector('[data-save-mountain="' + id + '"]');
+        if (again) again.focus({ preventScroll: true });
       });
     });
   }
@@ -639,6 +765,8 @@
   }
 
   function renderCatalog() {
+    var catEst = $('catalog-estimate');
+    if (catEst) catEst.innerHTML = estimateRowHtml('catalog');
     var input = $('mountain-search');
     if (input) input.value = catalogState.q;
     renderCatalogResults();
@@ -780,8 +908,11 @@
     if (est) {
       var unverified = MOUNTAIN.figures && MOUNTAIN.figures.verified === false;
       est.hidden = !unverified;
-      est.innerHTML = unverified ? '<span class="badge">' + esc(t('approx.label')) + '</span>' : '';
+      est.className = unverified ? 'est-row px-5 pb-3 pt-1' : '';
+      est.innerHTML = unverified ? estimateRowHtml('route') : '';
     }
+    var trailEst = $('trail-estimate');
+    if (trailEst) trailEst.innerHTML = estimateRowHtml('route');
     renderGuideSave();
     // The route length, the second chip.
     var dist = $('mtn-distance');
@@ -2593,8 +2724,7 @@
 
   // The guide travels with the app; saving it pins it in the catalog and
   // confirms the shell really is cached. Nothing is sent.
-  async function toggleGuideSave() {
-    var id = MOUNTAIN.id;
+  async function toggleSaved(id) {
     var list = savedMountains();
     var at = list.indexOf(id);
     if (at >= 0) {
@@ -2759,7 +2889,7 @@
     wirePacking();
     wireCatalog();
     var guideSave = $('guide-save');
-    if (guideSave) guideSave.addEventListener('click', toggleGuideSave);
+    if (guideSave) guideSave.addEventListener('click', function () { toggleSaved(MOUNTAIN.id); });
     wireLocation();
     if (demo) seedDemoShare(); // after wireLocation fills the name and contact fields
     wirePhotoInput();

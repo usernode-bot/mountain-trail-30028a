@@ -133,7 +133,8 @@
       <header>
         <h1 class="font-display text-title" data-i18n="catalog.title">Mountains of Indonesia</h1>
         <p class="mt-1 text-body text-muted" data-i18n="catalog.sub">Official routes across the islands, from Sumatra to Papua.</p>
-        <p class="mt-2 text-small text-muted"><span class="badge" data-i18n="approx.label">Estimate, not a survey</span> <span data-i18n="approx.catalog">Heights, distances and times are guide estimates.</span></p>
+        <p class="mt-2 text-small text-muted" data-i18n="approx.catalog">Heights, distances and times are guide estimates.</p>
+        <div id="catalog-estimate" class="est-row mt-1"></div>
       </header>
 
       <label for="mountain-search" class="mb-1.5 mt-4 block text-small font-medium" data-i18n="catalog.search">Search mountains</label>
@@ -186,7 +187,7 @@
           <span class="mist mist-a"></span>
           <span class="mist mist-b"></span>
         </div>
-        <p id="mtn-estimate" class="mt-2" hidden></p>
+        <div id="mtn-estimate" hidden></div>
       </header>
 
       <div class="mt-3">
@@ -228,6 +229,7 @@
       <ol id="trail-line" class="trail-line"></ol>
 
       <p class="mt-3 text-small text-muted" data-i18n="trail.approx">Heights, distances, times and the difficulty rating are approximate guide figures for the Cibodas route, not a survey.</p>
+      <div id="trail-estimate" class="est-row mt-1"></div>
 
       <!-- Notifications: an in-app list for the hiker who follows the
            mountain. The toggle lives in a card; the list sits outside it. -->
