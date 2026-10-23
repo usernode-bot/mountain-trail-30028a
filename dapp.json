@@ -141,6 +141,12 @@
       "expectText": "Estimate, not a survey"
     },
     {
+      "name": "Catalog filters open from one Filter button",
+      "path": "/#mountains",
+      "expectText": "Filter",
+      "expectSelector": "#catalog-filters button"
+    },
+    {
       "name": "A mountain opens its own guide",
       "path": "/?mountain=semeru",
       "expectText": "Ranu Pane route to Mahameru",

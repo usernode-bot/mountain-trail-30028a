@@ -33,8 +33,8 @@
     return heightBand(entry.summitM) === band;
   }
 
-  // opts: { q, difficulty, height, status, savedOnly, savedIds }. Every
-  // filter is optional; 'all' or a missing value means no constraint.
+  // opts: { q, difficulty, height, island, status, savedOnly, savedIds }.
+  // Every filter is optional; 'all' or a missing value means no constraint.
   function filterEntries(entries, opts) {
     var o = opts || {};
     var q = String(o.q || '').trim().toLowerCase();
@@ -43,6 +43,7 @@
       if (!matchesQuery(e, q)) return false;
       if (o.difficulty && o.difficulty !== 'all' && e.difficulty !== o.difficulty) return false;
       if (o.height && o.height !== 'all' && !matchesHeight(e, o.height)) return false;
+      if (o.island && o.island !== 'all' && e.island !== o.island) return false;
       var level = e.status && e.status.level;
       if (o.status && o.status !== 'all' && level !== o.status) return false;
       if (o.savedOnly && saved.indexOf(e.id) < 0) return false;
