@@ -65,3 +65,28 @@ test('the real catalog filters to at least 40 rows and every island groups', () 
   assert.equal(C.filterEntries(all, { q: 'semeru' })[0].id, 'semeru');
   assert.equal(C.filterEntries(all, { q: 'no such mountain' }).length, 0);
 });
+
+test('the island filter keeps one island and composes with the others', () => {
+  assert.deepEqual(C.filterEntries(ENTRIES, { island: 'jawa' }).map((e) => e.id), ['semeru', 'prau']);
+  assert.deepEqual(C.filterEntries(ENTRIES, { island: 'sumatra', difficulty: 'hard' }).map((e) => e.id), ['kerinci']);
+  assert.deepEqual(C.filterEntries(ENTRIES, { island: 'jawa', height: 'low' }).map((e) => e.id), []);
+  assert.equal(C.filterEntries(ENTRIES, { island: 'all' }).length, 4);
+});
+
+test('the Filter button counts the panel filters that are set', () => {
+  assert.equal(C.activeFilterCount({}), 0);
+  assert.equal(C.activeFilterCount({ island: 'all', difficulty: 'all', height: 'all', status: 'all' }), 0);
+  assert.equal(C.activeFilterCount({ island: 'bali', difficulty: 'hard', height: 'all', status: 'open' }), 3);
+  // The search and Saved stay on the screen and are not counted.
+  assert.equal(C.activeFilterCount({ q: 'semeru', savedOnly: true }), 0);
+});
+
+test('every catalog entry carries an island the filter offers', () => {
+  T.DESTINATIONS.forEach((d) => {
+    assert.ok(T.ISLANDS.indexOf(T.catalogView(d).island) >= 0, d.id + ' has island ' + d.island);
+  });
+  const all = T.DESTINATIONS.map((d) => T.catalogView(d));
+  const bali = C.filterEntries(all, { island: 'bali' });
+  assert.ok(bali.length > 0);
+  assert.ok(bali.every((e) => e.island === 'bali'));
+});

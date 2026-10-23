@@ -33,7 +33,17 @@
     return heightBand(entry.summitM) === band;
   }
 
-  // opts: { q, difficulty, height, status, savedOnly, savedIds }. Every
+  // The filters that live behind the Filter button, in panel order. The
+  // search and Saved stay on the screen and are not counted.
+  var PANEL_FILTERS = ['island', 'difficulty', 'height', 'status'];
+
+  // How many panel filters are set to something other than 'all'.
+  function activeFilterCount(opts) {
+    var o = opts || {};
+    return PANEL_FILTERS.filter(function (k) { return o[k] && o[k] !== 'all'; }).length;
+  }
+
+  // opts: { q, island, difficulty, height, status, savedOnly, savedIds }. Every
   // filter is optional; 'all' or a missing value means no constraint.
   function filterEntries(entries, opts) {
     var o = opts || {};
@@ -41,6 +51,7 @@
     var saved = o.savedIds || [];
     return (entries || []).filter(function (e) {
       if (!matchesQuery(e, q)) return false;
+      if (o.island && o.island !== 'all' && e.island !== o.island) return false;
       if (o.difficulty && o.difficulty !== 'all' && e.difficulty !== o.difficulty) return false;
       if (o.height && o.height !== 'all' && !matchesHeight(e, o.height)) return false;
       var level = e.status && e.status.level;
@@ -69,6 +80,8 @@
 
   return {
     HEIGHT_BANDS: HEIGHT_BANDS,
+    PANEL_FILTERS: PANEL_FILTERS,
+    activeFilterCount: activeFilterCount,
     heightBand: heightBand,
     filterEntries: filterEntries,
     groupByIsland: groupByIsland,

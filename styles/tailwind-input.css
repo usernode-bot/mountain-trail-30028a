@@ -485,6 +485,10 @@
     padding-right: 9px;
   }
   .chip-count { @apply font-normal text-muted; }
+  /* How many catalog filters are set, on the Filter button. */
+  .filter-count {
+    @apply ml-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-small font-semibold text-on-accent;
+  }
   /* The walk to the next stop sits on the dashed rail between the nodes:
      its padding plus the stop rows' 6 px keeps it about 12 px clear of
      both, and the 56 px indent puts it past the node with the stop text. */
