@@ -152,10 +152,10 @@
       "expectText": "Estimate, not a survey"
     },
     {
-      "name": "Catalog filters open from one Filter button",
+      "name": "Catalog filters sit behind one Filter button",
       "path": "/#mountains",
       "expectText": "Filter",
-      "expectSelector": "#catalog-filters button"
+      "expectSelector": "#catalog-filter-btn"
     },
     {
       "name": "Catalog shows mountain cards with a difficulty badge and a bookmark",

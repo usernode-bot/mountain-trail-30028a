@@ -72,6 +72,7 @@
     lembah: '<path d="M2 5c2 8 5 11 10 11s8-3 10-11"/><path d="M7 20c2-1 3 1 5 0s3 1 5 0"/>',
     junction: '<path d="M12 21v-8"/><path d="M12 13L6 3"/><path d="M12 13l6-10"/>',
     bookmark: '<path d="M6 3h12v18l-6-4-6 4z"/>',
+    sliders: '<path d="M4 7h10"/><path d="M18 7h2"/><circle cx="16" cy="7" r="2"/><path d="M4 17h2"/><path d="M10 17h10"/><circle cx="8" cy="17" r="2"/>',
     filter: '<path d="M4 7h16"/><path d="M7 12h10"/><path d="M10 17h4"/>',
     bookmarkOn: '<path d="M6 3h12v18l-6-4-6 4z" fill="currentColor"/>',
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M4.9 4.9l1.4 1.4"/><path d="M17.7 17.7l1.4 1.4"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M4.9 19.1l1.4-1.4"/><path d="M17.7 6.3l1.4-1.4"/>',
@@ -206,7 +207,9 @@
   }
 
   // The catalog's filter state lives for the session only, never stored.
-  var catalogState = { q: '', difficulty: 'all', height: 'all', island: 'all', status: 'all', savedOnly: false };
+  var catalogState = { q: '', island: 'all', difficulty: 'all', height: 'all', status: 'all', savedOnly: false };
+  // The open Filter sheet's body, re-rendered as its chips are tapped.
+  var catalogSheetBody = null;
 
   // ── Kit shims (the bridge or native kit may be missing on a plain run) ──
   function kitToast(msg) {
@@ -544,17 +547,7 @@
   }
 
   function catalogActive() {
-    return !!(catalogState.q || catalogState.difficulty !== 'all' ||
-      catalogState.height !== 'all' || catalogState.island !== 'all' ||
-      catalogState.status !== 'all' || catalogState.savedOnly);
-  }
-
-  // How many of the sheet's four filter groups are not on All. Search and
-  // Saved are not counted: they stay on the main screen.
-  function catalogFilterCount() {
-    return ['difficulty', 'height', 'island', 'status'].filter(function (k) {
-      return catalogState[k] !== 'all';
-    }).length;
+    return !!(catalogState.q || catalogState.savedOnly || CAT.activeFilterCount(catalogState) > 0);
   }
 
   function statusWord(level) {
@@ -611,99 +604,95 @@
     return t('catalog.height.high', { m: fmtM(3000) });
   }
 
-  // The catalog's filter groups, in the order the panel shows them.
-  function catalogFilterGroups() {
-    return [
-      {
-        key: 'difficulty',
-        label: t('catalog.filter.difficulty'),
-        options: ['all'].concat(M.DIFFICULTIES),
-        labelFor: function (id) { return id === 'all' ? t('type.all') : t('diff.' + id); },
-      },
-      {
-        key: 'height',
-        label: t('catalog.filter.height'),
-        options: ['all'].concat(CAT.HEIGHT_BANDS),
-        labelFor: heightLabel,
-      },
-      {
-        key: 'island',
-        label: t('catalog.filter.island'),
-        options: ['all'].concat(M.ISLANDS),
-        labelFor: function (id) { return id === 'all' ? t('catalog.filter.allIslands') : t('island.' + id); },
-      },
-      {
-        key: 'status',
-        label: t('catalog.filter.status'),
-        options: ['all', 'open', 'limited', 'closed'],
-        labelFor: function (id) { return id === 'all' ? t('type.all') : statusWord(id); },
-      },
-    ];
+  // The rows the current filters leave, for the results and the sheet's
+  // "Show n mountains" button.
+  function catalogShown(entries) {
+    return CAT.filterEntries(entries || catalogEntries(), {
+      q: catalogState.q,
+      island: catalogState.island,
+      difficulty: catalogState.difficulty,
+      height: catalogState.height,
+      status: catalogState.status,
+      savedOnly: catalogState.savedOnly,
+      savedIds: savedMountains(),
+    });
   }
 
-  function renderCatalogFilters() {
-    var el = $('catalog-filters');
+  // The Filter button: its label, and a count once a panel filter is set.
+  function renderCatalogFilterButton() {
+    var btn = $('catalog-filter-btn');
+    if (!btn) return;
+    var n = CAT.activeFilterCount(catalogState);
+    btn.className = 'chip' + (n ? ' chip-on' : '');
+    btn.setAttribute('aria-label', n ? tn('catalog.filter.aria', n) : t('catalog.filter'));
+    btn.innerHTML = iconSvg('sliders', 'h-4 w-4') + esc(t('catalog.filter')) +
+      (n ? '<span class="filter-count" data-filter-count>' + n + '</span>' : '');
+  }
+
+  // The sheet's body: Island, Difficulty, Height and Status as chips that
+  // wrap, so every choice shows on a phone without scrolling sideways.
+  function renderCatalogSheet() {
+    var el = catalogSheetBody;
     if (!el) return;
-    var n = catalogFilterCount();
-    var label = n ? t('catalog.filterAria', { n: n }) : t('catalog.filter');
-    el.innerHTML = '<button type="button" class="chip' + (n ? ' chip-on' : '') +
-      '" aria-haspopup="dialog" aria-label="' + esc(label) + '">' +
-      iconSvg('filter', 'h-4 w-4') + esc(t('catalog.filter')) +
-      (n ? '<span class="chip-count">' + n + '</span>' : '') + '</button>';
-    el.querySelector('button').addEventListener('click', openCatalogFilters);
+    var groups = [
+      { key: 'island', label: t('catalog.filter.island'), ids: ['all'].concat(M.ISLANDS),
+        name: function (id) { return id === 'all' ? t('type.all') : t('island.' + id); } },
+      { key: 'difficulty', label: t('catalog.filter.difficulty'), ids: ['all'].concat(M.DIFFICULTIES),
+        name: function (id) { return id === 'all' ? t('type.all') : t('diff.' + id); } },
+      { key: 'height', label: t('catalog.filter.height'), ids: ['all'].concat(CAT.HEIGHT_BANDS), name: heightLabel },
+      { key: 'status', label: t('catalog.filter.status'), ids: ['all', 'open', 'limited', 'closed'],
+        name: function (id) { return id === 'all' ? t('type.all') : statusWord(id); } },
+    ];
+    var n = CAT.activeFilterCount(catalogState);
+    el.innerHTML =
+      '<div class="flex items-center justify-between gap-2">' +
+        '<h2 class="font-display text-heading">' + esc(t('catalog.filter.title')) + '</h2>' +
+        '<button type="button" class="btn-text" data-cat-reset' + (n ? '' : ' disabled') + '>' + esc(t('catalog.filter.reset')) + '</button>' +
+      '</div>' +
+      groups.map(function (g) {
+        return '<div role="group" aria-label="' + esc(g.label) + '">' +
+          '<p class="section-label mt-4">' + esc(g.label) + '</p>' +
+          '<div class="flex flex-wrap gap-1.5">' + g.ids.map(function (id) {
+            var on = catalogState[g.key] === id;
+            return '<button type="button" class="chip' + (on ? ' chip-on' : '') + '" data-cat-key="' + g.key +
+              '" data-cat-value="' + esc(id) + '" aria-pressed="' + on + '">' + esc(g.name(id)) + '</button>';
+          }).join('') + '</div></div>';
+      }).join('') +
+      '<button type="button" class="btn-primary mt-6 w-full" data-cat-done>' +
+        esc(tn('catalog.filter.show', catalogShown().length)) + '</button>';
+    Array.prototype.forEach.call(el.querySelectorAll('[data-cat-key]'), function (btn) {
+      btn.addEventListener('click', function () {
+        catalogState[btn.getAttribute('data-cat-key')] = btn.getAttribute('data-cat-value');
+        renderCatalogResults();
+      });
+    });
+    var reset = el.querySelector('[data-cat-reset]');
+    if (reset) reset.addEventListener('click', function () {
+      CAT.PANEL_FILTERS.forEach(function (k) { catalogState[k] = 'all'; });
+      renderCatalogResults();
+    });
   }
 
-  // One bottom sheet for every catalog filter: full-width rows, so no label
-  // is cut off. A tap applies at once and keeps the panel open.
+  // The sheet updates the results behind it as chips are tapped; its button
+  // only closes it. renderCatalogResults forgets the body once it is gone.
   function openCatalogFilters() {
     var wrap = document.createElement('div');
-    wrap.className = 'flex flex-col gap-3 p-4';
-    // Four groups of rows are taller than a phone; the sheet itself does not
-    // scroll, so cap the content and let it scroll inside the sheet.
-    wrap.style.maxHeight = '80vh';
-    wrap.style.overflowY = 'auto';
-    var html = '<h2 class="font-display text-heading">' + esc(t('catalog.filter')) + '</h2>';
-    catalogFilterGroups().forEach(function (g) {
-      html += '<div><p class="section-label mt-2">' + esc(g.label) + '</p><ul class="list">' +
-        g.options.map(function (id) {
-          return '<li><button type="button" class="list-row w-full text-left text-body" data-cat-group="' + g.key +
-            '" data-cat-value="' + esc(id) + '"><span>' + esc(g.labelFor(id)) + '</span>' +
-            '<span class="ml-auto' + (catalogState[g.key] === id ? ' text-accent' : ' hidden') + '" data-tick>' +
-            iconSvg('check', 'h-5 w-5') + '</span></button></li>';
-        }).join('') + '</ul></div>';
-    });
-    html += '<button type="button" class="btn-primary w-full" data-cat-done>' + esc(t('catalog.filter.done')) + '</button>';
-    wrap.innerHTML = html;
+    wrap.className = 'p-4';
+    wrap.setAttribute('data-catalog-sheet', '');
+    catalogSheetBody = wrap;
+    renderCatalogSheet();
     var handle = presentSheet(wrap);
-
-    function syncRows() {
-      Array.prototype.forEach.call(wrap.querySelectorAll('[data-cat-group]'), function (btn) {
-        var on = catalogState[btn.getAttribute('data-cat-group')] === btn.getAttribute('data-cat-value');
-        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-        btn.classList.toggle('font-semibold', on);
-        btn.classList.toggle('text-accent', on);
-        var tick = btn.querySelector('[data-tick]');
-        if (tick) tick.classList.toggle('hidden', !on);
-      });
-    }
-
     wrap.addEventListener('click', function (e) {
-      var btn = e.target && e.target.closest ? e.target.closest('[data-cat-group]') : null;
-      if (btn) {
-        catalogState[btn.getAttribute('data-cat-group')] = btn.getAttribute('data-cat-value');
-        syncRows();
-        renderCatalogResults();
-        return;
-      }
-      if (e.target && e.target.closest && e.target.closest('[data-cat-done]')) handle.dismiss();
+      if (e.target.closest && e.target.closest('[data-cat-done]')) handle.dismiss();
     });
-    syncRows();
   }
 
   function renderCatalogResults() {
     var el = $('catalog-results');
     if (!el) return;
-    renderCatalogFilters();
+    renderCatalogFilterButton();
+    if (catalogSheetBody && !catalogSheetBody.isConnected) catalogSheetBody = null;
+    renderCatalogSheet();
     var savedEl = $('catalog-saved');
     if (savedEl) {
       savedEl.className = 'chip' + (catalogState.savedOnly ? ' chip-on' : '');
@@ -713,15 +702,7 @@
     var clear = $('catalog-clear');
     if (clear) clear.hidden = !catalogActive();
     var entries = catalogEntries();
-    var shown = CAT.filterEntries(entries, {
-      q: catalogState.q,
-      difficulty: catalogState.difficulty,
-      height: catalogState.height,
-      island: catalogState.island,
-      status: catalogState.status,
-      savedOnly: catalogState.savedOnly,
-      savedIds: savedMountains(),
-    });
+    var shown = catalogShown(entries);
     var count = $('catalog-count');
     var html = '';
     if (!shown.length) {
@@ -777,7 +758,7 @@
   }
 
   function clearCatalog() {
-    catalogState = { q: '', difficulty: 'all', height: 'all', island: 'all', status: 'all', savedOnly: false };
+    catalogState = { q: '', island: 'all', difficulty: 'all', height: 'all', status: 'all', savedOnly: false };
     var input = $('mountain-search');
     if (input) input.value = '';
     renderCatalogResults();
@@ -807,6 +788,8 @@
     });
     var clear = $('catalog-clear');
     if (clear) clear.addEventListener('click', clearCatalog);
+    var filterBtn = $('catalog-filter-btn');
+    if (filterBtn) filterBtn.addEventListener('click', openCatalogFilters);
   }
 
   // ── Selecting a mountain ───────────────────────────────────────────────

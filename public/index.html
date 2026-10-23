@@ -138,15 +138,20 @@
       </header>
 
       <label for="mountain-search" class="mb-1.5 mt-4 block text-small font-medium" data-i18n="catalog.search">Search mountains</label>
-      <div class="flex items-center gap-2">
-        <input type="search" id="mountain-search" class="field min-w-0 flex-1" data-i18n-placeholder="catalog.search.ph" placeholder="e.g. Semeru">
-        <div id="catalog-filters" class="flex-none"></div>
+      <input type="search" id="mountain-search" class="field" data-i18n-placeholder="catalog.search.ph" placeholder="e.g. Semeru">
+
+      <!-- Island, difficulty, height and status live behind one Filter
+           button (a sheet), so nothing here scrolls sideways. -->
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        <button type="button" id="catalog-filter-btn" class="chip" aria-haspopup="dialog">
+          <span data-i18n="catalog.filter">Filter</span>
+        </button>
         <button type="button" id="catalog-saved" class="chip" aria-pressed="false" aria-label="Show saved guides only" data-i18n-label="catalog.savedAria">
           <span data-i18n="catalog.saved">Saved</span>
         </button>
+        <button type="button" id="catalog-clear" class="btn-text ml-auto" hidden data-i18n="catalog.clear">Clear filters</button>
       </div>
       <p id="catalog-count" class="mt-1 text-small text-muted"></p>
-      <button type="button" id="catalog-clear" class="btn-text mt-1" hidden data-i18n="catalog.clear">Clear filters</button>
       <div id="catalog-results"></div>
     </section>
 
