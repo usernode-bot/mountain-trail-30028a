@@ -97,24 +97,33 @@
        works. -->
   <link rel="stylesheet" href="/usernode-native/v1/native.css">
   <script src="/usernode-native/v1/native.js"></script>
-  <!-- Follow the viewer's Homeroom theme (the bridge reports it), with the
-       OS preference as the fallback outside Homeroom. -->
+  <!-- The colour mode. Homeroom's own light/dark setting decides until a
+       hiker picks one in the banner; outside Homeroom the device preference
+       decides. The pick lives on this phone (mt:theme), never on the server.
+       theme.js is loaded first so the first paint is already the right look. -->
+  <script src="/theme.js"></script>
   <script>
     (function () {
       var media = window.matchMedia('(prefers-color-scheme: dark)');
-      function applyTheme() {
-        var theme = (window.usernode && window.usernode.theme) || (media.matches ? 'dark' : 'light');
+      function apply() {
+        var pref = window.MT_THEME ? MT_THEME.preference() : 'auto';
+        var theme = window.MT_THEME
+          ? MT_THEME.resolve(pref, window.usernode && window.usernode.theme, media.matches)
+          : ((window.usernode && window.usernode.theme) || (media.matches ? 'dark' : 'light'));
         document.documentElement.classList.toggle('dark', theme === 'dark');
         document.documentElement.style.colorScheme = theme;
+        document.documentElement.setAttribute('data-theme-pref', pref);
       }
-      applyTheme();
-      window.addEventListener('usernode:theme-changed', applyTheme);
-      media.addEventListener('change', applyTheme);
+      apply();
+      window.addEventListener('usernode:theme-changed', apply);
+      media.addEventListener('change', apply);
+      // app.js calls this after the hiker picks a mode.
+      window.MT_THEME_APPLY = apply;
     })();
   </script>
 </head>
 <body class="min-h-screen bg-ground text-fg">
-  <main id="app-main" class="mx-auto max-w-md px-4 pb-32 pt-4">
+  <main id="app-main" class="mx-auto max-w-md px-4 pb-32 pt-5">
 
     <p id="demo-line" hidden class="demo-line -mx-4 mb-4" data-i18n="demo.line">Staging demo: the hikers, reports and trip here are made up.</p>
 
@@ -144,18 +153,36 @@
     <!-- Trail: the mountain's current state and its route. Reading, so its
          actions stay quiet and the trail line gets the room. -->
     <section id="tab-trail" role="tabpanel" aria-label="Trail" data-i18n-label="tab.trail">
-      <header>
-        <div class="flex items-start justify-between gap-3">
-          <div class="min-w-0">
-            <h1 id="mtn-name" class="font-display text-title">Gede Pangrango</h1>
-            <p id="mtn-route" class="mt-1 text-body text-muted"></p>
-            <p id="mtn-difficulty" class="ls-line" hidden></p>
-            <p id="mtn-category" class="ls-line"></p>
-            <p id="mtn-place" class="ls-line"></p>
+      <!-- The mountain banner: name and elevation large, the figures that
+           matter at a glance as chips, and the ridgeline under them with a
+           slow band of mist. app.js fills the text and the chips. -->
+      <header id="mtn-hero" class="hero">
+        <div class="hero-body">
+          <div class="hero-top">
+            <p id="mtn-category" class="hero-kicker"></p>
+            <button type="button" id="theme-btn" class="hero-theme"></button>
           </div>
+          <h1 id="mtn-name" class="hero-name">Gede Pangrango</h1>
+          <p id="mtn-elev" class="hero-elev"></p>
+          <p id="mtn-route" class="hero-route"></p>
+          <p id="mtn-place" class="hero-meta"></p>
+          <div class="hero-chips">
+            <p id="mtn-difficulty" class="hero-chip" hidden></p>
+            <span id="mtn-distance" class="hero-chip"></span>
+            <span id="mtn-status" class="hero-chip"></span>
+          </div>
+          <p id="offline-line" class="hero-meta" hidden></p>
+        </div>
+        <div class="hero-scene" aria-hidden="true">
+          <svg class="hero-scene-svg" viewBox="0 0 400 120" preserveAspectRatio="none" focusable="false">
+            <path class="ridge ridge-back" d="M0 92 L30 66 L54 78 L92 42 L120 64 L148 50 L176 70 L206 38 L238 66 L268 52 L302 74 L332 58 L364 76 L400 60 L400 120 L0 120 Z"/>
+            <path class="ridge ridge-mid" d="M0 106 L36 82 L66 96 L100 68 L132 88 L164 60 L196 82 L230 64 L262 86 L296 70 L330 92 L366 74 L400 88 L400 120 L0 120 Z"/>
+            <path class="ridge ridge-front" d="M0 110 L44 100 L86 110 L124 96 L162 108 L202 98 L242 110 L282 100 L322 112 L362 102 L400 110 L400 120 L0 120 Z"/>
+          </svg>
+          <span class="mist mist-a"></span>
+          <span class="mist mist-b"></span>
         </div>
         <p id="mtn-estimate" class="mt-2" hidden></p>
-        <p id="offline-line" class="mt-2 flex items-center gap-1.5 text-small text-muted" hidden></p>
       </header>
 
       <div class="mt-3">
@@ -171,16 +198,16 @@
       <div id="status-strip" class="status-strip status-strip-load mt-2.5" role="button" tabindex="0" aria-label="Trail status" data-i18n-label="strip.status"></div>
 
       <div id="permits-section">
-        <h2 class="section-label mt-6" data-i18n="permits.section">Permits and quota</h2>
+        <h2 class="section-label mt-8" data-i18n="permits.section">Permits and quota</h2>
         <div id="permits-card" class="card"></div>
       </div>
 
       <div id="weather-section">
-        <h2 class="section-label mt-6" data-i18n="weather.section">Basecamp and summit weather</h2>
+        <h2 class="section-label mt-8" data-i18n="weather.section">Basecamp and summit weather</h2>
         <div id="weather-card" class="card"></div>
       </div>
 
-      <h2 class="section-label mt-6" data-i18n="offline.section">Offline</h2>
+      <h2 class="section-label mt-8" data-i18n="offline.section">Offline</h2>
       <div id="offline-pack" class="card">
         <div id="offline-text" aria-live="polite"></div>
         <button type="button" id="offline-save" class="btn-secondary mt-3" data-i18n="offline.save">Save reports for offline</button>
@@ -192,7 +219,7 @@
       </figure>
       <ol id="profile-stops" class="profile-stops mt-2" aria-label="Stops on the height profile"></ol>
 
-      <h2 class="section-label mt-6" data-i18n="trail.section">Basecamp to summit</h2>
+      <h2 class="section-label mt-8" data-i18n="trail.section">Basecamp to summit</h2>
       <div id="type-chips" class="chip-row" role="group" aria-label="Stop type" data-i18n-label="type.group"></div>
       <ol id="trail-line" class="trail-line"></ol>
 
@@ -200,7 +227,7 @@
 
       <!-- Notifications: an in-app list for the hiker who follows the
            mountain. The toggle lives in a card; the list sits outside it. -->
-      <h2 class="section-label mt-6" data-i18n="notif.section">Notifications</h2>
+      <h2 class="section-label mt-8" data-i18n="notif.section">Notifications</h2>
       <div class="card">
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
@@ -217,12 +244,15 @@
 
     <!-- Report: one tap sends. The app's one primary action lives here. -->
     <section id="tab-report" role="tabpanel" aria-label="Report" data-i18n-label="tab.report" hidden>
-      <header>
-        <h1 class="font-display text-heading" data-i18n="report.title">Report the trail</h1>
-        <p class="mt-1 text-body text-muted" data-i18n="report.sub">Tap what you see. It sends straight away, or as soon as you have signal.</p>
+      <header class="banner">
+        <div class="banner-body">
+          <h1 class="banner-title" data-i18n="report.title">Report the trail</h1>
+          <p class="banner-sub" data-i18n="report.sub">Tap what you see. It sends straight away, or as soon as you have signal.</p>
+        </div>
+        <span class="banner-ridge" aria-hidden="true"></span>
       </header>
 
-      <label for="stop-picker" class="mb-1.5 mt-5 block text-small font-medium" data-i18n="report.where">Where you are</label>
+      <label for="stop-picker" class="mb-1.5 mt-6 block text-small font-medium" data-i18n="report.where">Where you are</label>
       <select id="stop-picker" class="field"></select>
       <p id="picker-hint" class="mt-1.5 text-small text-muted"></p>
 
@@ -266,7 +296,7 @@
 
       <div id="sent-note" class="card mt-3" hidden></div>
 
-      <h2 class="section-label mt-6" data-i18n="report.section">Latest reports, last 24 hours</h2>
+      <h2 class="section-label mt-8" data-i18n="report.section">Latest reports, last 24 hours</h2>
       <ul id="reports-list" class="list"></ul>
       <p id="reports-refreshed" class="mt-2 text-small text-muted"></p>
       <input type="file" id="photo-input" accept="image/*" class="hidden" aria-hidden="true" tabindex="-1">
@@ -274,9 +304,12 @@
 
     <!-- Packing: two numbers, and the list builds itself. -->
     <section id="tab-packing" role="tabpanel" aria-label="Packing" data-i18n-label="tab.packing" hidden>
-      <header>
-        <h1 class="font-display text-heading" data-i18n="pack.title">Pack for the climb</h1>
-        <p class="mt-1 text-body text-muted" data-i18n="pack.sub">The list builds itself from your days and group, and from this mountain.</p>
+      <header class="banner">
+        <div class="banner-body">
+          <h1 class="banner-title" data-i18n="pack.title">Pack for the climb</h1>
+          <p class="banner-sub" data-i18n="pack.sub">The list builds itself from your days and group, and from this mountain.</p>
+        </div>
+        <span class="banner-ridge" aria-hidden="true"></span>
       </header>
 
       <div class="mt-4 grid grid-cols-2 gap-2.5">
@@ -308,9 +341,12 @@
 
     <!-- Location: the last saved position, and a message ready to send. -->
     <section id="tab-location" role="tabpanel" aria-label="Location" data-i18n-label="tab.location" hidden>
-      <header>
-        <h1 class="font-display text-heading" data-i18n="loc.title">Last location</h1>
-        <p class="mt-1 text-body text-muted" data-i18n="loc.sub">Your coordinates, ready to send to basecamp or to family.</p>
+      <header class="banner">
+        <div class="banner-body">
+          <h1 class="banner-title" data-i18n="loc.title">Last location</h1>
+          <p class="banner-sub" data-i18n="loc.sub">Your coordinates, ready to send to basecamp or to family.</p>
+        </div>
+        <span class="banner-ridge" aria-hidden="true"></span>
       </header>
 
       <div class="card mt-4">
@@ -323,19 +359,19 @@
         <p id="loc-status" class="mt-2 text-small text-muted"></p>
       </div>
 
-      <label for="name-field" class="mb-1.5 mt-5 block text-small font-medium" data-i18n="loc.name">Your name</label>
+      <label for="name-field" class="mb-1.5 mt-6 block text-small font-medium" data-i18n="loc.name">Your name</label>
       <input type="text" id="name-field" class="field" maxlength="60" autocomplete="name" placeholder="e.g. Ayu" data-i18n-placeholder="loc.name.ph">
       <label for="contact-field" class="mb-1.5 mt-3 block text-small font-medium" data-i18n="loc.contact">Basecamp contact</label>
       <input type="text" id="contact-field" class="field" maxlength="40" autocomplete="tel" inputmode="tel" placeholder="e.g. 0812 0000 0000" data-i18n-placeholder="loc.contact.ph">
       <p class="mt-1.5 text-small text-muted" data-i18n="loc.optional">Both optional, kept on this phone only. Every message carries Indonesia's emergency number, 112.</p>
 
-      <p id="lang-label" class="mb-1.5 mt-5 block text-small font-medium">Language / Bahasa</p>
+      <p id="lang-label" class="mb-1.5 mt-6 block text-small font-medium">Language / Bahasa</p>
       <div class="grid grid-cols-2 gap-2" role="group" aria-labelledby="lang-label">
         <button type="button" class="btn-secondary" data-lang="en" lang="en" aria-pressed="true">English</button>
         <button type="button" class="btn-secondary" data-lang="id" lang="id" aria-pressed="false">Bahasa Indonesia</button>
       </div>
 
-      <h2 class="section-label mt-6" data-i18n="loc.msg.section">Message to send</h2>
+      <h2 class="section-label mt-8" data-i18n="loc.msg.section">Message to send</h2>
       <div class="card">
         <p id="msg-preview" class="whitespace-pre-wrap text-body"></p>
       </div>
@@ -350,7 +386,7 @@
       <p class="mt-2 text-small text-muted" data-i18n="loc.hint">WhatsApp needs mobile data. SMS needs only phone signal. With no signal at all, read the coordinates out over radio.</p>
 
       <div id="share-queue-wrap" hidden>
-        <h2 class="section-label mt-6" data-i18n="share.section">Waiting for signal</h2>
+        <h2 class="section-label mt-8" data-i18n="share.section">Waiting for signal</h2>
         <ul id="share-queue" class="list"></ul>
       </div>
     </section>

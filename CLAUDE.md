@@ -130,21 +130,34 @@ request changes the look on purpose.
 - **Palette:** cool lichen and stone grey neutrals with a hint of green
   (not a warm cream), forest green as the action colour, and the trail's
   own subject colours: amber for warnings (Slippery, No water, Heavy fog),
-  red for a blocked path (Landslide), map blue for water sources. Light
-  and dark values live in `styles/tailwind-input.css` (`--ground`,
-  `--accent`, `--warn`, `--danger`, `--water`, ...); `tailwind.config.js`
-  names them.
-- **Signature element:** the trail line. A dashed rail, drawn the way
-  trails are drawn on a map, runs from basecamp down the screen to the
-  summit. Each stop is a round node carrying its kind's icon (hut,
-  signpost, drop, tent, peak), and the node's ring takes the colour of the
-  stop's latest condition. The walk to the next stop sits on the line
-  between nodes, and the height profile at the top repeats the same stops
-  as coloured dots.
-- **Type scale:** `text-title` (28 px bold, the mountain's name),
-  `text-heading` (20 px semibold, tab headings), `text-body` (16 px),
-  `text-small` (14 px). Headings use the system's rounded face
-  (`font-display`, `ui-rounded`); body text the system sans.
+  red for a blocked path (Landslide), map blue for water sources. The
+  mountain banner adds its own sky — dawn, morning mist and dusk
+  (`--sky-1` / `--sky-2` / `--sky-3` with `--sky-glow`), and the forest
+  ridgeline (`--ridge`, `--mist`). These are subject colours, not a second
+  accent. Light and dark values live in `styles/tailwind-input.css`
+  (`--ground`, `--accent`, `--warn`, `--danger`, `--water`, ...);
+  `tailwind.config.js` names them.
+- **Signature elements:** the mountain banner and the trail line.
+  - The banner (`.hero`) opens the Trail tab and every tab's heading: a
+    soft dawn-to-dusk gradient card with layered ridge silhouettes and a
+    slow band of drifting mist (`motion-safe`; still where the viewer asks
+    for reduced motion). The Trail tab's version carries the mountain's
+    name and summit height in large type, the route line, the colour-mode
+    button, and small chips for difficulty, distance and trail status.
+    The Report, Packing and Location tabs use the compact `.banner` at the
+    same sky.
+  - The trail line. A dashed rail, drawn the way trails are drawn on a map,
+    runs from basecamp down the screen to the summit. Each stop is a round
+    node carrying its kind's icon (hut, signpost, drop, tent, peak), and
+    the node's ring takes the colour of the stop's latest condition. The
+    walk to the next stop sits on the line between nodes, and the height
+    profile above it repeats the same stops as coloured dots.
+- **Type scale:** `text-hero` (34 px bold, the mountain's name),
+  `text-title` (28 px bold, the summit height), `text-heading` (20 px
+  semibold, banner headings), `text-body` (16 px), `text-small` (14 px).
+  Headings use the system's rounded face (`font-display`, `ui-rounded`);
+  body text the system sans. Spacing is roomy: sections are 32 px apart,
+  cards pad 20 px and list rows 14 px.
 - **Icons:** one drawn line set, one stroke width. Basecamp (a hut), post
   (a signpost), water (a drop), camp (a tent), summit (a peak with a
   flag), and one per condition: wet waves, a shedding slope, a crossed-out
@@ -159,7 +172,8 @@ The kit is in `styles/tailwind-input.css`: colour tokens with a light and
 a dark value (named in `tailwind.config.js`), and components
 (`btn-primary`, `btn-secondary`, `field`, `list` and `list-row`,
 `card`, `section-label`, `skeleton`, `state-empty`, `state-error`, plus
-the trail line, status strip, condition buttons and tab bar).
+the mountain banner `hero` / `hero-chip` / `hero-theme`, the compact
+`banner`, the trail line, status strip, condition buttons and tab bar).
 Re-theme by changing the token values there, keeping every text pair at
 4.5:1 or more in both looks.
 
@@ -179,6 +193,15 @@ Re-theme by changing the token values there, keeping every text pair at
 - No cards in cards, no uppercase eyebrows, no emoji as icons.
 
 ## App-specific conventions
+
+- The colour mode is a device setting in `mt:theme` (the same key in the
+  demo): `auto`, `light` or `dark`. Auto follows the viewer's Homeroom
+  theme first and the device preference outside Homeroom; a pick wins
+  until the hiker cycles back to Auto. The button in the mountain banner
+  (`public/theme.js` for the decision, `index.html` for applying it,
+  `app.js` for the label) is the only control. The pick is never sent to
+  the server, and a new copy string goes in both dictionaries under
+  `theme.*`.
 
 - The app reads in English or Bahasa Indonesia. The language lives in
   `mt:lang` in localStorage (the same key in the demo and outside it) and is

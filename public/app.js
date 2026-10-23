@@ -72,6 +72,9 @@
     lembah: '<path d="M2 5c2 8 5 11 10 11s8-3 10-11"/><path d="M7 20c2-1 3 1 5 0s3 1 5 0"/>',
     junction: '<path d="M12 21v-8"/><path d="M12 13L6 3"/><path d="M12 13l6-10"/>',
     bookmark: '<path d="M6 3h12v18l-6-4-6 4z"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M4.9 4.9l1.4 1.4"/><path d="M17.7 17.7l1.4 1.4"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M4.9 19.1l1.4-1.4"/><path d="M17.7 6.3l1.4-1.4"/>',
+    moon: '<path d="M20 15.5A8.5 8.5 0 0 1 8.5 4a8.5 8.5 0 1 0 11.5 11.5z"/>',
+    contrast: '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" stroke="none"/>',
   };
   function iconSvg(name, cls) {
     return '<svg class="' + cls + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[name] + '</svg>';
@@ -333,11 +336,44 @@
       btn.addEventListener('click', function () { setLang(btn.getAttribute('data-lang')); });
     });
   }
+
+  // ── Colour mode: Auto (follows Homeroom), Light, Dark ─────────────────
+  // The pick is a device setting (mt:theme, the same key in the demo), and
+  // theme.js/index.html apply it to the page; app.js only labels the
+  // button and cycles the three modes.
+  var THEME_ICON = { auto: 'contrast', light: 'sun', dark: 'moon' };
+  function themePref() {
+    try { return window.MT_THEME ? MT_THEME.preference() : 'auto'; } catch (e) { return 'auto'; }
+  }
+  function renderThemeButton() {
+    var btn = $('theme-btn');
+    if (!btn) return;
+    var pref = themePref();
+    var label = t('theme.' + pref);
+    btn.innerHTML = iconSvg(THEME_ICON[pref] || 'contrast', 'h-4 w-4') + '<span>' + esc(label) + '</span>';
+    btn.setAttribute('aria-label', t('theme.aria', { mode: label }));
+  }
+  function wireTheme() {
+    var btn = $('theme-btn');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      if (!window.MT_THEME) {
+        // No theme module (a stale cached shell): still flip this visit.
+        var dark = document.documentElement.classList.toggle('dark');
+        document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+        return;
+      }
+      MT_THEME.save(MT_THEME.next(MT_THEME.preference()));
+      if (typeof window.MT_THEME_APPLY === 'function') window.MT_THEME_APPLY();
+      renderThemeButton();
+    });
+  }
   // The whole app switches at once, no reload. A sheet already open keeps
   // the language it opened with; everything re-rendered uses the new one.
   function rerenderAll() {
     applyStaticText();
     renderLangButtons();
+    renderThemeButton();
     renderHeader();
     renderReportsAndTrail();
     renderPermits();
@@ -652,6 +688,22 @@
   function renderHeader() {
     $('mtn-name').textContent = MOUNTAIN.name;
     document.title = MOUNTAIN.name + ' · Mountain Trail';
+    // Over the name: what kind of landscape this is (the category belongs
+    // to the destination, so it shows once) and which province it is in.
+    var cat = $('mtn-category');
+    if (cat) {
+      cat.innerHTML = '<span>' + iconSvg(MOUNTAIN.category, 'h-4 w-4') + esc(t('ls.' + MOUNTAIN.category)) + '</span>' +
+        '<span class="hero-kicker-sep" aria-hidden="true">·</span>' +
+        '<span>' + esc(MOUNTAIN.province) + '</span>';
+    }
+    // The summit's height, large under the name.
+    var elev = $('mtn-elev');
+    if (elev) {
+      elev.innerHTML = '<span class="hero-elev-num">' + esc(fmtM(MOUNTAIN.summitM)) + '</span>' +
+        '<span class="hero-elev-unit">m</span>';
+      elev.setAttribute('aria-label', t('hero.elevLabel', { m: fmtM(MOUNTAIN.summitM) }));
+    }
+    // The way in, and how long it takes.
     $('mtn-route').textContent = t('trail.routeNamed', {
       route: MOUNTAIN.routeName,
       peak: MOUNTAIN.summitName,
@@ -660,8 +712,8 @@
       climb: fmtM(MOUNTAIN.climbM),
       hours: fmtHours(MOUNTAIN),
     });
-    // The route's difficulty, on its own short line above the category.
-    // A route without a known rating shows no line at all.
+    // The route's difficulty, as a chip. A route without a known rating
+    // shows no chip at all.
     var diff = $('mtn-difficulty');
     if (diff) {
       var dIdx = M.DIFFICULTIES.indexOf(MOUNTAIN.difficulty);
@@ -669,17 +721,14 @@
         var steps = '';
         for (var i = 0; i < 3; i++) steps += '<i' + (i <= dIdx ? ' class="on"' : '') + '></i>';
         diff.hidden = false;
-        diff.innerHTML = '<span><span class="diff-meter" aria-hidden="true">' + steps + '</span>' +
-          '<span>' + esc(t('trail.difficulty', { level: '' })) +
-          '<span class="text-fg font-medium">' + esc(t('diff.' + MOUNTAIN.difficulty)) + '</span></span></span>';
+        diff.innerHTML = '<span class="diff-meter" aria-hidden="true">' + steps + '</span>' +
+          '<span><span class="hero-chip-label">' + esc(t('trail.difficulty', { level: '' })) + '</span>' +
+          '<span class="font-medium">' + esc(t('diff.' + MOUNTAIN.difficulty)) + '</span></span>';
       } else {
         diff.hidden = true;
         diff.innerHTML = '';
       }
     }
-    // The category belongs to the mountain, so it shows once, here.
-    var cat = $('mtn-category');
-    if (cat) cat.innerHTML = '<span>' + iconSvg(MOUNTAIN.category, 'h-4 w-4') + esc(t('ls.' + MOUNTAIN.category)) + '</span>';
     var place = $('mtn-place');
     if (place) place.innerHTML = '<span>' + iconSvg('pin', 'h-4 w-4') +
       esc(t('trail.place', { island: t('island.' + MOUNTAIN.island), province: MOUNTAIN.province })) + '</span>';
@@ -690,6 +739,13 @@
       est.innerHTML = unverified ? '<span class="badge">' + esc(t('approx.label')) + '</span>' : '';
     }
     renderGuideSave();
+    // The route length, the second chip.
+    var dist = $('mtn-distance');
+    if (dist) {
+      dist.innerHTML = '<span><span class="hero-chip-label">' + esc(t('hero.distance')) + '</span> ' +
+        '<span class="font-medium">' + esc(fmtKm(MOUNTAIN.lengthKm)) + ' km</span></span>';
+    }
+    renderThemeButton();
     var line = $('offline-line');
     if (!navigator.onLine && usingCache) {
       line.hidden = false;
@@ -738,10 +794,24 @@
     // ── The official status banner: Buka / Dibuka Terbatas / Ditutup ──────
     function renderStatusBanner() {
       var el = $('status-banner');
+      var chip = $('mtn-status');
       var s = shownStatus();
-      if (!s.updatedAt) { el.hidden = true; return; }
+      if (!s.updatedAt) {
+        el.hidden = true;
+        if (chip) chip.hidden = true;
+        return;
+      }
       el.hidden = false;
       var tone = ST.statusTone(s.level);
+      // The same level at a glance, as a chip in the mountain banner.
+      if (chip) {
+        chip.hidden = false;
+        chip.className = 'hero-chip ' + (tone === 'danger' ? 'hero-chip-danger'
+          : (tone === 'warn' ? 'hero-chip-warn' : 'hero-chip-accent'));
+        chip.innerHTML = '<span class="hero-chip-dot" aria-hidden="true"></span>' +
+          '<span>' + esc(levelLabel(s.level)) + '</span>';
+        chip.setAttribute('aria-label', t('hero.status', { level: levelLabel(s.level) }));
+      }
       var toneClass = tone === 'danger' ? 'status-banner-danger'
         : (tone === 'warn' ? 'status-banner-warn' : 'status-banner-accent');
       el.className = 'status-banner ' + toneClass + ' mt-4';
@@ -2611,6 +2681,7 @@
     applyStaticText();
     renderLangButtons();
     wireLang();
+    wireTheme();
     // The mountain in the URL wins, then the last one opened, then Gede.
     applyMountain(initialMountainId());
     picker = $('stop-picker');

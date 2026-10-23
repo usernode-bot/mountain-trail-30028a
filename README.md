@@ -51,6 +51,17 @@ Location tab and is kept on the phone (`mt:lang`, never sent anywhere).
 Trail stop names stay as they are; conditions and every other string are
 translated in `public/i18n.js`.
 
+## Appearance
+
+Every tab opens under a mountain banner: a dawn-to-dusk sky over layered
+ridgelines, with a slow band of drifting mist that stays still when the
+phone asks for reduced motion. On the Trail tab the banner carries the
+mountain's name and summit height, its route, and small chips for
+difficulty, distance and trail status. The colour-mode button there
+switches between Auto, Light and Dark; Auto follows your Homeroom or
+device setting, and the choice is kept on the phone (`mt:theme`, never
+sent anywhere).
+
 ## Offline
 
 The guide is static content that ships with the app (`public/trail-data.js`),

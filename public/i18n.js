@@ -61,7 +61,17 @@
       'island.maluku': 'Maluku',
       'island.papua': 'Papua',
 
+      // ── Colour mode (the banner's button) ──
+      'theme.auto': 'Auto',
+      'theme.light': 'Light',
+      'theme.dark': 'Dark',
+      'theme.aria': 'Colour mode: {mode}. Tap to change.',
+
       // ── Trail tab ──
+      'hero.routeLine': 'Cibodas route to Puncak Gede, about {hours} hours up.',
+      'hero.elevLabel': 'Summit elevation {m} m',
+      'hero.distance': 'Distance',
+      'hero.status': 'Trail status: {level}',
       'trail.route': 'Cibodas route to Puncak Gede, {elev} m. {km} km and {climb} m of climbing, about {hours} hours up.',
       'trail.routeNamed': '{route} route to {peak}, {elev} m. {km} km and {climb} m of climbing, about {hours} up.',
       'trail.hoursRange': '{min} to {max} hours',
@@ -450,7 +460,17 @@
       'island.maluku': 'Maluku',
       'island.papua': 'Papua',
 
-      // ── Tab Jalur ──
+      // ── Colour mode (the banner's button) ──
+      'theme.auto': 'Otomatis',
+      'theme.light': 'Terang',
+      'theme.dark': 'Gelap',
+      'theme.aria': 'Mode warna: {mode}. Ketuk untuk ganti.',
+
+      // ── Trail tab ──
+      'hero.routeLine': 'Jalur Cibodas ke Puncak Gede, sekitar {hours} jam naik.',
+      'hero.elevLabel': 'Ketinggian puncak {m} m',
+      'hero.distance': 'Jarak',
+      'hero.status': 'Status jalur: {level}',
       'trail.route': 'Jalur Cibodas ke Puncak Gede, {elev} m. {km} km dengan tanjakan {climb} m, sekitar {hours} jam naik.',
       'trail.routeNamed': 'Jalur {route} ke {peak}, {elev} m. {km} km dengan tanjakan {climb} m, sekitar {hours} naik.',
       'trail.hoursRange': '{min} sampai {max} jam',

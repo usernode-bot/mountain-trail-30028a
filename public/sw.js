@@ -13,6 +13,7 @@ var PHOTOS = 'mt-photos';
 var PRECACHE = [
   '/',
   '/tailwind.css',
+  '/theme.js',
   '/i18n.js',
   '/app.js',
   '/trail-data.js',

@@ -87,6 +87,7 @@
   var SHELL_FILES = [
     '/',
     '/tailwind.css',
+    '/theme.js',
     '/i18n.js',
     '/app.js',
     '/trail-data.js',
